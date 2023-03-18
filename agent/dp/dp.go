@@ -311,3 +311,17 @@ func listenDP() {
 		}
 	}
 }
+
+/*
+这段代码是Go语言的一个dp包，它包含了三个处理函数：dpMsgAppUpdate、dpMsgThreatLog和dpMsgConnection。这三个函数都会接收一个字节数组参数，然后将其解析并作出相应的处理。
+
+dpMsgAppUpdate函数会将字节数组转换成一个应用程序结构体，该结构体包含应用程序的各种信息。然后它会将这些信息封装到一个名为DPTask的结构体中，并调用taskCallback函数，
+将这个结构体传递给该函数进行处理。
+
+dpMsgThreatLog函数也会将字节数组转换成一个威胁日志结构体，该结构体包含威胁日志的各种信息。然后它会将这些信息封装到一个名为DPTask的结构体中，并调用taskCallback函数，
+将这个结构体传递给该函数进行处理。
+
+dpMsgConnection函数也是类似的，它会将字节数组转换成一个连接结构体，该结构体包含连接的各种信息。然后它会将这些信息封装到一个名为DPTask的结构体中，并调用taskCallback函数，
+将这个结构体传递给该函数进行处理。
+
+*/
