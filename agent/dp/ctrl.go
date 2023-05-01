@@ -38,23 +38,27 @@ const dpKeepAliveInterval time.Duration = (time.Second * 2) //time.Duration是go
 var keepAliveSeq uint32   //用于代表心跳包的序列号，以便在neuvector代理接收到心跳包时能够验证其完整性，并避免重复和丢失
 var dpAliveMsgCnt uint = 0  //表示容器和neuvector代理之间已经发送的心跳包的数量，用于检测连接是否正常工作
 
-var taskCallback DPTaskCallback
-var statusChan chan bool
-var restartChan chan interface{}
+var taskCallback DPTaskCallback   //定义一个名为taskCallback的变量，它是一个函数类型DPTaskCallback的值  //这个变量代表neuvector代理执行某些任务时的回调函数
+var statusChan chan bool  //定义了一个通道（channel）类型的值，并且该通道只能传输bool类型的值  //在go中通道是一种用于goroutine之间进行通信和同步的基本机制，可以在不同的goroutine中发送和接收数据，并确保数据按照先进先出的顺序进行处理。
+var restartChan chan interface{} //该通道可以传输任何类型的值；用于在neuvector代理需要重新启动时触发通知
 
 func dpClientLock() {
 	// log.Info("")
-	dpClientMutex.Lock()
+	dpClientMutex.Lock()  //获取互斥锁，确保在多个goroutine并发访问该变量时只有一个goroutine能够执行这个函数内部的代码块  //在需要保护共享资源的位置可以调用此函数
 }
 
 func dpClientUnlock() {
 	// log.Info("")
-	dpClientMutex.Unlock()
+	dpClientMutex.Unlock()  //释放互斥锁，使得其他goroutine可以访问该共享资源
 }
 
 // With lock hold
-func dpSendMsgExSilent(msg []byte, timeout int, cb DPCallback, param interface{}) int {
-	if dpConn == nil {
+// msg  表示要发送的消息内容，类型为字节数组
+// timeout 表示消息传输的超时时间
+// cb 表示在收到neuvector代理的相应后调用的回调函数
+// param 表示传递给回调函数的参数
+func dpSendMsgExSilent(msg []byte, timeout int, cb DPCallback, param interface{}) int {   //为neuvector代理发送消息
+	if dpConn == nil {   //检测是否与neuvector代理建立了连接  //nil是空指针或空值
 		log.Error("Data path not connected")
 		if cb != nil {
 			cb(nil, param)
@@ -62,9 +66,9 @@ func dpSendMsgExSilent(msg []byte, timeout int, cb DPCallback, param interface{}
 		return -1
 	}
 
-	dpConn.SetWriteDeadline(time.Now().Add(time.Second * 2))
+	dpConn.SetWriteDeadline(time.Now().Add(time.Second * 2))  //如果建立了连接，就将消息写入unix socket文件中，并设置超时时间为timeout指定的的值
 	_, err := dpConn.Write(msg)
-	if err != nil {
+	if err != nil {  //msg发送失败的情况
 		log.WithFields(log.Fields{"error": err}).Error("Send error")
 		// Let keep alive to close dp to avoid reentry
 		// closeDP()
@@ -75,7 +79,7 @@ func dpSendMsgExSilent(msg []byte, timeout int, cb DPCallback, param interface{}
 		return -1
 	}
 
-	if cb != nil {
+	if cb != nil {  //msg发送成功的情况
 		if timeout == 0 {
 			timeout = defaultDPMsgTimeout
 		}
@@ -83,10 +87,10 @@ func dpSendMsgExSilent(msg []byte, timeout int, cb DPCallback, param interface{}
 		var done bool
 		var buf []byte = make([]byte, C.DP_MSG_SIZE)
 
-		for !done {
-			dpConn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(timeout)))
-			n, err := dpConn.Read(buf)
-			if err != nil {
+		for !done {  //只要任务没完成，就一直循环，直到收到neuvector代理的相应或者超时结束
+			dpConn.SetReadDeadline(time.Now().Add(time.Second * time.Duration(timeout)))  //设置超时时间，让心跳包机制负责监测和关闭连接
+			n, err := dpConn.Read(buf)  //从已连接的unix socket中读取数据
+			if err != nil {  //读取失败
 				log.WithFields(log.Fields{"error": err}).Error("Read error")
 				cb(nil, param)
 				// Time out could be because DP is busy. Don't close DP yet.
@@ -94,30 +98,38 @@ func dpSendMsgExSilent(msg []byte, timeout int, cb DPCallback, param interface{}
 				// closeDP()
 				return -1
 			} else {
-				done = cb(buf[:n], param)
+				done = cb(buf[:n], param)  //读取成功时，将接收到的消息交给回调函数处理
 			}
 		}
 	}
-	dpAliveMsgCnt++
-	return 0
+	dpAliveMsgCnt++   //每向neuvector代理发送一条消息就自增1，以便检测连接是否正常工作
+	return 0  //返回0表示操作成功
 }
 
-func dpSendMsgEx(msg []byte, timeout int, cb DPCallback, param interface{}) int {
-	log.WithFields(log.Fields{"msg": string(msg), "size": len(msg)}).Debug("")
+//##调用了dpSendMsgExSilent函数，只是加了互斥锁
+func dpSendMsgEx(msg []byte, timeout int, cb DPCallback, param interface{}) int {   
+	log.WithFields(log.Fields{"msg": string(msg), "size": len(msg)}).Debug("") //打印调试日志
 
 	// The cb call is inside the dp lock, so be careful if you need to grab
 	// another lock in cb
 	dpClientLock()
-	defer dpClientUnlock()
+	defer dpClientUnlock()  //确保在函数返回之前总是会释放该锁（不管函数是否发生错误）
 	return dpSendMsgExSilent(msg, timeout, cb, param)
 }
 
-func dpSendMsg(msg []byte) int {
+//##用于向neuvector发送不带超时和回调函数的消息
+func dpSendMsg(msg []byte) int {  
 	return dpSendMsgEx(msg, 0, nil, nil)
 }
 
 // -- DP message functions
+//##用于向neuvector代理发送添加tap端口的请求
+//netns 表示要添加tap端口的网络命名空间
+//iface 表示要添加的tap端口名称
+//epmac 表示tap端口的mac地址
 
+//Tap端口：是一种虚拟的网络接口，用于在不同网络栈之间传递数据包；在linux中，可以通过创建虚拟的tap端口来模拟物理网络接口。
+	//neuvector代理提供了添加、管理和监控tap端口的功能，以保证集群中的所有节点都能够安全的通信，并遵守预定义的安全策略
 func DPCtrlAddTapPort(netns, iface string, epmac net.HardwareAddr) {
 	log.WithFields(log.Fields{"netns": netns, "iface": iface}).Debug("")
 
@@ -128,8 +140,8 @@ func DPCtrlAddTapPort(netns, iface string, epmac net.HardwareAddr) {
 			EPMAC: epmac.String(),
 		},
 	}
-	msg, _ := json.Marshal(data)
-	dpSendMsg(msg)
+	msg, _ := json.Marshal(data)  //将参数转化为json
+	dpSendMsg(msg)  //给neuvector代理发送添加tap端口的请求
 }
 
 func DPCtrlDelTapPort(netns, iface string) {
