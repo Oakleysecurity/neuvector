@@ -4,17 +4,17 @@ package dp
 import "C"
 
 import (
-	"bytes"
-	"encoding/binary"
-	"encoding/json"
-	"fmt"
-	"net"
-	"os"
-	"sync"
-	"time"
-	"unsafe"
+	"bytes"    //实现字节操作的函数和类型
+	"encoding/binary"   //提供了对于二进制数据和整数之间的转换
+	"encoding/json"   //提供了json数据编码和解码的功能
+	"fmt"     //提供了格式化输入和输出的功能
+	"net"  //网络通信相关的函数和类型
+	"os"   //操作系统函数和类型
+	"sync"   //同步原语，例如互斥锁和条件变量
+	"time"  //时间处理相关函数和类型
+	"unsafe"  //访问系统底层，绕过类型安全检查等操作
 
-	log "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus" //将第三方库导入并起别名为log，方便使用
 	"github.com/neuvector/neuvector/share"
 	"github.com/neuvector/neuvector/share/utils"
 )
