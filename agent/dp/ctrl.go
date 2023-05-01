@@ -21,19 +21,22 @@ import (
 
 // TODO: The workflow need to be reworked.
 //       1. Disconnect condition of both sides should be handled.
-const dpClient string = "/tmp/dp_client.%d"
+//常量 名称 类型 = value
+//变量 名称 类型
+const dpClient string = "/tmp/dp_client.%d"    //定义一个字符串类型的常量
 const ctrlServer string = "/tmp/ctrl_listen.sock"
 
-const defaultDPMsgTimeout int = 2
+const defaultDPMsgTimeout int = 2   //定义一个整型常量
 const dpConnJamRetryMax int = 16
 
-var dpConn *net.UnixConn
-var dpClientMutex sync.Mutex
+var dpConn *net.UnixConn   //定义了一个net.UnixConn类型的指针变量dpConn   //这个变量通常代表与NeuVector代理建立的Unix socket连接
+var dpClientMutex sync.Mutex  //定义了一个sync.Mutex类型的互斥锁变量dpClientMutex  //用于在多线程同时访问dpConn变量时保持互斥性
 
-const dpKeepAliveInterval time.Duration = (time.Second * 2)
+const dpKeepAliveInterval time.Duration = (time.Second * 2) //time.Duration是go中表示时间长度的类型，使用纳秒作为基本单位，可以方便的将时间间隔转化为不同单位的字符串表示
+//dpKeepAliveInterval表示容器和Neuvector代理之间保持连接的心跳包发送间隔，初始值为2秒
 
-var keepAliveSeq uint32
-var dpAliveMsgCnt uint = 0
+var keepAliveSeq uint32   //用于代表心跳包的序列号，以便在neuvector代理接收到心跳包时能够验证其完整性，并避免重复和丢失
+var dpAliveMsgCnt uint = 0  //表示容器和neuvector代理之间已经发送的心跳包的数量，用于检测连接是否正常工作
 
 var taskCallback DPTaskCallback
 var statusChan chan bool
