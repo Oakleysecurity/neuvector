@@ -417,6 +417,9 @@ func DPCtrlStatsAgent(cb DPCallback, param interface{}) {
 	dpSendMsgEx(msg, 5, cb, param)
 }
 
+//##用于向neuvector代理发送查询代理节点计数器信息的请求
+
+//最终，当 NeuVector 代理收到该请求后，会根据请求中的信息查询代理节点的计数器信息，并将结果返回给调用方。回调函数 cb 将在 NeuVector 返回结果后被异步执行，并将查询结果作为参数传递进来，以供调用方进一步处理和分析。
 func DPCtrlCounterAgent(cb DPCallback, param interface{}) {
 	log.Debug("")
 
@@ -427,6 +430,8 @@ func DPCtrlCounterAgent(cb DPCallback, param interface{}) {
 	dpSendMsgEx(msg, 5, cb, param)
 }
 
+//##向neuvector代理发送设置代理节点调试信息的请求
+//用于设置代理节点调试信息的函数，可以方便地对代理节点进行调试和排查问题。
 func DPCtrlConfigAgent(debug *DPDebug) {
 	log.Debug("")
 
@@ -437,6 +442,8 @@ func DPCtrlConfigAgent(debug *DPDebug) {
 	dpSendMsg(msg)
 }
 
+//##用于向 NeuVector 代理发送查询会话数量统计信息的请求。
+//最终，当 NeuVector 代理收到该请求后，会根据请求中的信息查询会话数量的统计信息，并将结果返回给调用方。回调函数 cb 将在 NeuVector 返回结果后被异步执行，并将查询结果作为参数传递进来，以供调用方进一步处理和分析。
 func DPCtrlCountSession(cb DPCallback, param interface{}) {
 	log.Debug("")
 
@@ -447,6 +454,8 @@ func DPCtrlCountSession(cb DPCallback, param interface{}) {
 	dpSendMsgEx(msg, 5, cb, param)
 }
 
+//##用于向 NeuVector 代理发送查询会话列表的请求。
+//最终，当 NeuVector 代理收到该请求后，会根据请求中的信息查询会话列表，并将结果返回给调用方。回调函数 cb 将在 NeuVector 返回结果后被异步执行，并将查询结果作为参数传递进来，以供调用方进一步处理和分析。
 func DPCtrlListSession(cb DPCallback, param interface{}) {
 	log.Debug("")
 
@@ -457,6 +466,8 @@ func DPCtrlListSession(cb DPCallback, param interface{}) {
 	dpSendMsgEx(msg, 5, cb, param)
 }
 
+//##向 NeuVector 代理发送清除指定会话信息的请求。
+//这个函数是用于清除指定会话信息的函数，可以方便地对会话信息进行管理和维护。
 func DPCtrlClearSession(id uint32) {
 	log.Debug("")
 
@@ -469,6 +480,16 @@ func DPCtrlClearSession(id uint32) {
 	dpSendMsg(msg)
 }
 
+
+//##向neuvector代理发送查询计量信息的请求
+//最终，当 NeuVector 代理收到该请求后，会根据请求中的信息查询计量信息，并将结果返回给调用方。回调函数 cb 将在 NeuVector 返回结果后被异步执行，并将查询结果作为参数传递进来，以供调用方进一步处理和分析。
+/*
+计量信息是指在 NeuVector 中，用于收集和统计网络流量、事件、安全威胁等各种数据的一类信息。它可以帮助用户了解系统的性能、安全状况和异常情况，并且提供给用户更加详细和准确的分析工具和报告。计量信息通常包括以下几个方面：
+流量统计：NeuVector 可以对网络流量进行统计和分类，以了解每个容器之间的流量模式和传输速率。
+事件日志：NeuVector 可以记录和存储各种事件，如攻击尝试、漏洞扫描、不寻常的行为等，以便后续审计和调查。
+安全指标：NeuVector 可以通过各种方式（如 CVE 数据库、漏洞扫描器等）对容器镜像和运行时进行风险评估，以发现可能存在的安全问题。
+性能指标：NeuVector 可以收集和展示各种性能指标，如 CPU 利用率、内存使用情况、网络延迟等，以帮助用户优化系统资源和应用程序性能。
+*/
 func DPCtrlListMeter(cb DPCallback, param interface{}) {
 	log.Debug("")
 
@@ -479,23 +500,36 @@ func DPCtrlListMeter(cb DPCallback, param interface{}) {
 	dpSendMsgEx(msg, 5, cb, param)
 }
 
+//##获取neuvector控制通道客户端的地址
+//const dpClient string = "/tmp/dp_client.%d" 
+
+/*
+这里的控制通道指的是 NeuVector 容器安全平台中的一种通信方式，用于在容器和宿主机之间进行双向的命令和数据交换。这个控制通道实现了一个客户端-服务器模型，其中 NeuVector 控制通道客户端运行在每个容器内部，而 NeuVector 控制通道服务器则运行在宿主机上。
+
+通过控制通道，NeuVector 控制通道客户端和服务器可以进行各种操作，如启动和停止容器、查询计量信息、发送安全事件等等。在实现上，控制通道使用 Unix 域套接字（Unix domain socket）技术来实现，这种套接字只能在本地进程间进行通信，因此具有较高的安全性和隔离性。
+
+总的来说，控制通道是 NeuVector 容器安全平台中一个重要的组件，它可以帮助用户进行容器管理、安全扫描、风险评估等各种操作，提供给用户更多的可视化信息和安全保障。
+*/
 func getDPCtrlClientAddr() string {
 	return fmt.Sprintf(dpClient, os.Getpid())
 }
 
 const maxMsgSize int = 8120
 
+//##用于向neuvector代理发送配置工作负载IP策略的请求
+//policy 表示要配置的工作负载IP策略
+//cmd 表示策略的命令码
 func DPCtrlConfigPolicy(policy *DPWorkloadIPPolicy, cmd uint) int {
-	var start, end int = 0, 0
-	var first bool = true
-	var rulesPerMsg int = 40
+	var start, end int = 0, 0  //起始位置
+	var first bool = true   
+	var rulesPerMsg int = 40  //每条消息包含的规则数
 
-	num := len(policy.IPRules)
+	num := len(policy.IPRules)   //策略数量
 	log.WithFields(log.Fields{
 		"workload": policy.WlID, "mac": policy.WorkloadMac, "num": num,
 	}).Debug("")
 
-	for num > 0 || first == true {
+	for num > 0 || first == true {   //循环发送每组规则
 		var flag uint = 0
 
 	retry:
@@ -547,6 +581,16 @@ func DPCtrlConfigPolicy(policy *DPWorkloadIPPolicy, cmd uint) int {
 	return 0
 }
 
+//##用于向 NeuVector 代理发送删除 FQDN 的请求。
+/*
+FQDN 是 Fully Qualified Domain Name 的缩写，中文意思是“完全限定域名”。它是一个互联网上用来唯一标识某个主机的名称。FQDN 通常由三部分组成：
+主机名（hostname）：指该主机自己取的名字，如 www、mail、ftp 等。
+域名（domain name）：指该主机所属的域名，如 google.com、baidu.cn 等。
+顶级域名（top-level domain）：指域名的最后一部分，如 .com、.edu、.gov 等。
+例如，在 www.google.com 这个 FQDN 中，www 是主机名，google 是域名，.com 是顶级域名。
+FQDN 在互联网上起到了重要的作用，它可以将多个主机和服务组合在一起，形成一个逻辑上的网络系统，并通过 DNS 解析实现了可靠的命名和寻址机制。
+在 NeuVector 容器安全平台中，FQDN 通常被用于描述容器之间的通信，或者用于访问外部网络资源。例如，用户可以使用 FQDN 配置工作负载 IP 策略，从而控制特定 FQDN 的数据流向和数据访问。
+*/
 func DPCtrlDeleteFqdn(names []string) int {
 	var start, end int = 0, len(names)
 	var namesPerMsg int = 20
@@ -567,13 +611,15 @@ func DPCtrlDeleteFqdn(names []string) int {
 	return 0
 }
 
+//##用于向neuvector代理发送设置FQDN对应IP地址的请求
+//fqdnip  表示要设置的FQDN和其对应的IP地址列表
 func DPCtrlSetFqdnIp(fqdnip *share.CLUSFqdnIp) int {
 	fips := make([]net.IP, 0, len(fqdnip.FqdnIP))
-	for _, fip := range fqdnip.FqdnIP {
+	for _, fip := range fqdnip.FqdnIP {  //遍历fqdnip.FqdnIP列表中的所有IP地址
 		if utils.IsIPv4(fip) == false {
 			continue
 		}
-		fips = append(fips, fip)
+		fips = append(fips, fip)  //将IP地址存在fips中
 	}
 	data := DPFqdnIpSetReq {
 		Fqdns: &DPFqdnIps{
@@ -588,6 +634,9 @@ func DPCtrlSetFqdnIp(fqdnip *share.CLUSFqdnIp) int {
 	return 0
 }
 
+
+//##用于向neuvector代理发送配置策略地址的请求（分批发送，类似getDPCtrlClientAddr函数）
+//subnets 表示要配置的子网列表
 func DPCtrlConfigPolicyAddr(subnets map[string]share.CLUSSubnet) {
 	data_subnet := make([]DPSubnet, 0, len(subnets))
 	for _, addr := range subnets {
@@ -656,6 +705,8 @@ func DPCtrlConfigPolicyAddr(subnets map[string]share.CLUSSubnet) {
 	}
 }
 
+//##用于向 NeuVector 代理发送配置内部子网的请求。
+//subnets 表示要配置的内部子网列表
 func DPCtrlConfigInternalSubnet(subnets map[string]share.CLUSSubnet) {
 	data_subnet := make([]DPSubnet, 0, len(subnets))
 	for _, addr := range subnets {
@@ -724,6 +775,8 @@ func DPCtrlConfigInternalSubnet(subnets map[string]share.CLUSSubnet) {
 	}
 }
 
+//##用于向 NeuVector 代理发送配置特殊 IP 子网的请求。
+//subnets 表示要配置的特殊IP子网列表
 func DPCtrlConfigSpecialIPSubnet(subnets map[string]share.CLUSSpecSubnet) {
 	data_subnet := make([]DPSpecSubnet, 0, len(subnets))
 	for _, addr := range subnets {
@@ -792,6 +845,8 @@ func DPCtrlConfigSpecialIPSubnet(subnets map[string]share.CLUSSpecSubnet) {
 	}
 }
 
+//##用于向neuvector代理发送配置数据防泄漏（DLP）规则的请求，将大量的规则配置消息分配发送
+//wldlprule 表示要配置的DLP规则信息
 func DPCtrlConfigDlp(wldlprule *DPWorkloadDlpRule) int {
 	var start, end int = 0, 0
 	var start1, end1 int = 0, 0
@@ -857,14 +912,14 @@ func DPCtrlConfigDlp(wldlprule *DPWorkloadDlpRule) int {
 				ID:     drn.ID,
 				Action: drn.Action,
 			}
-			data.DPWlDlpCfg.DlpRuleNames = append(data.DPWlDlpCfg.DlpRuleNames, drids)
+			data.DPWlDlpCfg.DlpRuleNames = append(data.DPWlDlpCfg.DlpRuleNames, drids)   //解析出dlp规则的名称
 		}
 		for _, wrn := range wldlprule.WafRuleNames[start1:end1] {
 			wrids := &DPDlpRidSetting{
 				ID:     wrn.ID,
 				Action: wrn.Action,
 			}
-			data.DPWlDlpCfg.WafRuleNames = append(data.DPWlDlpCfg.WafRuleNames, wrids)
+			data.DPWlDlpCfg.WafRuleNames = append(data.DPWlDlpCfg.WafRuleNames, wrids) //解析出waf规则的名称
 		}
 		msg, _ := json.Marshal(data)
 		sz := len(msg)
@@ -899,6 +954,16 @@ func DPCtrlConfigDlp(wldlprule *DPWorkloadDlpRule) int {
 	return 0
 }
 
+//##用于向 NeuVector 代理发送构建数据防泄漏（DLP）规则的请求。
+//dlpRulesInfo 表示DLP规则的信息
+//dlpDpMacs 表示要应用规则的工作负载MAC地址集合
+//delmacs 表示要删除规则的工作负载MAC地址集合
+/*
+dlpApplyDir 表示DLP 规则的应用方向，指定了规则检查数据流的方向
+DP_DLP_APPLY_DIR_BOTH（0）：表示检查双向数据流。
+DP_DLP_APPLY_DIR_INGRESS（1）：表示只检查入站数据流。
+DP_DLP_APPLY_DIR_EGRESS（2）：表示只检查出站数据流。
+*/
 func DPCtrlBldDlp(dlpRulesInfo []*DPDlpRuleEntry, dlpDpMacs utils.Set, delmacs utils.Set, dlpApplyDir int) int {
 	var start, end int = 0, 0
 	var first bool = true
@@ -973,6 +1038,13 @@ func DPCtrlBldDlp(dlpRulesInfo []*DPDlpRuleEntry, dlpDpMacs utils.Set, delmacs u
 	return 0
 }
 
+//##用于向 NeuVector 代理发送更改数据防泄漏（DLP）规则工作负载 MAC 地址的请求。
+//oldmacs 表示要更改的原始工作负载MAC地址集合
+//addmacs 表示新增加的工作负载mac地址集合
+//delmacs 表示要删除的工作负载mac地址集合
+
+//当 NeuVector 代理收到这个消息后，会根据其中的内容更新 DLP 规则应用的工作负载 MAC 地址列表，以便在下一次检查时使用最新的列表。
+//总的来说，DPCtrlBldDlpChgMac() 函数是用于更改 DLP 规则工作负载 MAC 地址的函数，它通过向 NeuVector 代理发送请求，实现了在运行时动态修改工作负载列表的功能。
 func DPCtrlBldDlpChgMac(oldmacs, addmacs, delmacs utils.Set) {
 
 	data := DPDlpBldMACReq{
@@ -995,6 +1067,8 @@ func DPCtrlBldDlpChgMac(oldmacs, addmacs, delmacs utils.Set) {
 	dpSendMsg(msg)
 }
 
+//##用于向 NeuVector 代理发送更改数据防泄漏（DLP）规则配置的工作负载 MAC 地址的请求。
+
 func DPCtrlDlpCfgChgMac(delmacs utils.Set) {
 
 	data := DPDlpCfgMACReq{
@@ -1013,6 +1087,9 @@ func DPCtrlDlpCfgChgMac(delmacs utils.Set) {
 
 // --- keep alive
 
+//##用作 NeuVector 代理和数据平面之间心跳包（keep-alive）的回调函数，在接收到心跳包响应时被调用
+//buf 表示收到的心跳包消息
+//param 表示用户自定义的参数
 func cbKeepAlive(buf []byte, param interface{}) bool {
 	if len(buf) == 0 {
 		log.Error("Empty message, close dp socket")
@@ -1020,11 +1097,11 @@ func cbKeepAlive(buf []byte, param interface{}) bool {
 		return true
 	}
 
-	hdr := ParseDPMsgHeader(buf)
+	hdr := ParseDPMsgHeader(buf)   //解析收到的消息头
 	if hdr == nil {
 		log.Error("Invalid DP message header")
 		return false
-	} else if hdr.Kind != C.DP_KIND_KEEP_ALIVE {
+	} else if hdr.Kind != C.DP_KIND_KEEP_ALIVE {  //判断消息是否为心跳包响应
 		// Keep waiting
 		log.Error("Not keep-alive message")
 		return false
@@ -1033,18 +1110,18 @@ func cbKeepAlive(buf []byte, param interface{}) bool {
 	var received uint32
 	offset := int(unsafe.Sizeof(*hdr))
 	r := bytes.NewReader(buf[offset:])
-	binary.Read(r, binary.BigEndian, &received)
+	binary.Read(r, binary.BigEndian, &received)   //获取收到的序列号
 
-	if received == keepAliveSeq {
+	if received == keepAliveSeq {  //比较序列号是否与期望值一致
 		// Matched response
-		return true
+		return true    //表示 NeuVector 代理和数据平面之间的连接正常，返回 true 表示成功处理了心跳包响应
 	}
 
 	// Keep waiting
 	log.WithFields(log.Fields{
 		"len": len(buf), "expect": keepAliveSeq, "received": received,
 	}).Error("Receive mismatched reply")
-	return false
+	return false    //函数会返回 false，表示需要继续等待下一个心跳包响应。
 }
 
 func dpKeepAlive() {
