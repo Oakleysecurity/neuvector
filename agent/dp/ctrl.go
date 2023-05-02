@@ -144,6 +144,7 @@ func DPCtrlAddTapPort(netns, iface string, epmac net.HardwareAddr) {
 	dpSendMsg(msg)  //给neuvector代理发送添加tap端口的请求
 }
 
+//##为代理发送删除tap端口的请求
 func DPCtrlDelTapPort(netns, iface string) {
 	log.WithFields(log.Fields{"netns": netns, "iface": iface}).Debug("")
 
@@ -157,10 +158,21 @@ func DPCtrlDelTapPort(netns, iface string) {
 	dpSendMsg(msg)
 }
 
+
+//##用于向Neuvector代理发送添加Nfq端口的请求
+//netns 表示要添加Nfq端口的网络命名空间
+//iface 表示要添加的Nfq端口的名称
+//qno 表示Nfq端口所在的队列编号
+//epmac  表示Nfq端口的mac地址
+//jumboframe 表示是否启用Jumbo Frame（巨型帧）模式，可选，可为nil；若开启则表示可以传输更大的数据包
+
+//Nfq（Netfilter Queue）端口是一种虚拟网络接口，用于将Linux系统内核中的数据包传递给用户空间的程序进行处理
+//当 Linux 系统内核中的某个网络栈收到一个数据包时，它可以根据事先定义的规则（如防火墙规则、路由表等）决定该如何处理这个数据包。如果需要对该数据包进行更为精确的过滤、监控或者修改等操作，则可以通过 Nfq 端口将该数据包传递给用户空间的程序进行处理。用户空间程序可以对数据包进行更灵活的处理，并且可以根据自己的需要决定是否将数据包继续发送到下一个网络栈中。
+//NeuVector 代理使用 Nfq 端口来实现对集群中的网络流量进行安全性检测和策略执行。当 NeuVector 代理收到一个数据包时，它会通过 Nfq 端口将数据包传递给用户空间的安全检测程序进行分析和处理。在安全检测完成后，NeuVector 代理可以根据预先定义的安全策略，决定是否将数据包发送到下一个网络栈中。
 func DPCtrlAddNfqPort(netns, iface string, qno int, epmac net.HardwareAddr, jumboframe *bool) {
 	log.WithFields(log.Fields{"netns": netns, "iface": iface}).Debug("")
 
-	data := DPAddNfqPortReq{
+	data := DPAddNfqPortReq{   //创建一个DPAddNfqPortReq结构体变量data
 		AddNfqPort: &DPNfqPort{
 			NetNS: netns,
 			Iface: iface,
@@ -169,12 +181,13 @@ func DPCtrlAddNfqPort(netns, iface string, qno int, epmac net.HardwareAddr, jumb
 		},
 	}
 	if jumboframe != nil {
-		data.AddNfqPort.JumboFrame = jumboframe
+		data.AddNfqPort.JumboFrame = jumboframe  //如果存在jumboframe参数，就将其赋值给JumboFrame字段
 	}
-	msg, _ := json.Marshal(data)
-	dpSendMsg(msg)
+	msg, _ := json.Marshal(data)  //转换为json
+	dpSendMsg(msg) //发送
 }
 
+//##用于向neuvector代理发送删除nfq端口的请求
 func DPCtrlDelNfqPort(netns, iface string) {
 	log.WithFields(log.Fields{"netns": netns, "iface": iface}).Debug("")
 
@@ -188,6 +201,9 @@ func DPCtrlDelNfqPort(netns, iface string) {
 	dpSendMsg(msg)
 }
 
+//##向neuvector代理发送添加服务端口的请求
+//iface 表示要添加的服务端口名称
+//jumboframe 表示是否启用Jumbo Frame（巨型帧）模式，参数可选
 func DPCtrlAddSrvcPort(iface string, jumboframe *bool) {
 	log.WithFields(log.Fields{"iface": iface}).Debug("")
 
@@ -215,6 +231,9 @@ func DPCtrlDelSrvcPort(iface string) {
 	dpSendMsg(msg)
 }
 
+//##向neuvector代理发送设置系统配置的请求
+//xffenabled 表示是否开启X-Forwarded-For（XFF）头部字段，可选，可为nil
+//最终，当 NeuVector 代理收到该请求后，会根据请求中的信息更新系统配置，并决定是否启用 XFF 头部字段。XFF 头部字段是一个常用的 HTTP 头部字段，用于标识客户端的真实 IP 地址，通常用于反向代理和负载均衡等场景中。如果启用了 XFF 头部字段，则 NeuVector 将能够更准确地确定数据包的来源，从而提高安全性检测的精度和效果。
 func DPCtrlSetSysConf(xffenabled *bool) {
 	log.WithFields(log.Fields{"xffenabled": *xffenabled}).Debug("")
 
@@ -227,10 +246,18 @@ func DPCtrlSetSysConf(xffenabled *bool) {
 	dpSendMsg(msg)
 }
 
+//##想代理发送添加mac地址的请求
+//iface 表示要添加mac地址的网络请求接口名称
+//mac 表示要添加的mac地址
+//ucmac 表示要添加的mac地址对应的单播地址
+//bcmac 表示要添加的mac地址对应的广播地址
+//oldmac 表示要替换的旧mac地址，可选，可为nil
+//pmac 表示要添加的mac地址所属的物理主机的mac地址，可选，可为nil
+//pips 表示要添加的mac地址所属的物理主机的IP地址列表，可选，可为nil
 func DPCtrlAddMAC(iface string, mac, ucmac, bcmac, oldmac, pmac net.HardwareAddr, pips []net.IP) {
 	log.WithFields(log.Fields{"mac": mac, "iface": iface}).Debug("")
 
-	tpips := make([]DPMacPip, 0, len(pips))
+	tpips := make([]DPMacPip, 0, len(pips))  //创建一个空的类型为[]DPMacPip的切片变量tpips，遍历pips参数中的每个IP第hi，将其封装成DPMacPip结构体，并添加到tpips中
 	for _, addr := range pips {
 		pip := DPMacPip{
 			IP: addr,
