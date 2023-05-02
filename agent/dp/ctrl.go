@@ -246,7 +246,7 @@ func DPCtrlSetSysConf(xffenabled *bool) {
 	dpSendMsg(msg)
 }
 
-//##想代理发送添加mac地址的请求
+//##向代理发送添加mac地址的请求
 //iface 表示要添加mac地址的网络请求接口名称
 //mac 表示要添加的mac地址
 //ucmac 表示要添加的mac地址对应的单播地址
@@ -257,8 +257,8 @@ func DPCtrlSetSysConf(xffenabled *bool) {
 func DPCtrlAddMAC(iface string, mac, ucmac, bcmac, oldmac, pmac net.HardwareAddr, pips []net.IP) {
 	log.WithFields(log.Fields{"mac": mac, "iface": iface}).Debug("")
 
-	tpips := make([]DPMacPip, 0, len(pips))  //创建一个空的类型为[]DPMacPip的切片变量tpips，遍历pips参数中的每个IP第hi，将其封装成DPMacPip结构体，并添加到tpips中
-	for _, addr := range pips {
+	tpips := make([]DPMacPip, 0, len(pips))  //创建一个空的类型为[]DPMacPip的切片变量tpips
+	for _, addr := range pips {   //遍历pips参数中的每个IP地址，将其封装成DPMacPip结构体，并添加到tpips中
 		pip := DPMacPip{
 			IP: addr,
 		}
@@ -276,13 +276,14 @@ func DPCtrlAddMAC(iface string, mac, ucmac, bcmac, oldmac, pmac net.HardwareAddr
 			PIPS:	tpips,
 		},
 	}
-	if pips == nil || len(pips) <= 0 {
+	if pips == nil || len(pips) <= 0 {  //如果pips为nil或长度小于0，则将data中的PIPS字段置为nil
 		data.AddMAC.PIPS = nil
 	}
-	msg, _ := json.Marshal(data)
+	msg, _ := json.Marshal(data)  //封装成json并发送
 	dpSendMsg(msg)
 }
 
+//##向代理发送删除mac地址的请求
 func DPCtrlDelMAC(iface string, mac net.HardwareAddr) {
 	log.WithFields(log.Fields{"mac": mac}).Debug("")
 
@@ -296,6 +297,8 @@ func DPCtrlDelMAC(iface string, mac net.HardwareAddr) {
 	dpSendMsg(msg)
 }
 
+//##向代理发送刷新应用程序列表的请求
+//最终，当 NeuVector 代理收到该请求后，会重新扫描集群中所有节点上运行的应用程序，并更新 NeuVector 中的应用程序列表。应用程序列表包括每个节点上正在运行的进程以及它们的元数据信息，如进程名称、命令行参数、环境变量等。这个函数的目的是确保 NeuVector 拥有最新的应用程序列表，以便它能够更准确地分析和检测集群中的网络流量。
 func DPCtrlRefreshApp() {
 	log.Debug("")
 
@@ -306,6 +309,12 @@ func DPCtrlRefreshApp() {
 	dpSendMsg(msg)
 }
 
+//##用于向neuvector代理发送配置mac地址的请求
+//MACs 表示要配置的MAC地址列表
+//tap 表示是否启用TAP模式，可选，可为nil
+//appMap 表示要配置的应用程序映射表，可选，可为nil
+
+//最终，当 NeuVector 代理收到该请求后，会根据请求中的信息配置相应的 MAC 地址，并根据需要启用 TAP 模式和应用程序映射表。TAP 模式是一种虚拟网络设备模式，用于模拟一个以太网交换机或者桥接器，从而实现对数据包的更为灵活的处理和控制。应用程序映射表用于将不同的 IP 协议和端口号映射到相应的应用程序上，在 NeuVector 进行安全性检测时可以更好地识别和过滤网络流量。
 func DPCtrlConfigMAC(MACs []string, tap *bool, appMap map[share.CLUSProtoPort]*share.CLUSApp) {
 	data := DPConfigMACReq{
 		Cfg: &DPMacConfig{
@@ -326,12 +335,25 @@ func DPCtrlConfigMAC(MACs []string, tap *bool, appMap map[share.CLUSProtoPort]*s
 			}
 			i++
 		}
-		data.Cfg.Apps = &apps
+		data.Cfg.Apps = &apps  //将apps各元素添加到data结构体的Apps字段
 	}
 	msg, _ := json.Marshal(data)
 	dpSendMsg(msg)
 }
 
+//##用于向neuvector代理发送添加端口对的请求
+//vex_iface 表示要添加的虚拟外部网络接口名称
+//vin_iface 表示要添加的虚拟内部网络接口名称
+//epmac 表示要分配给该端口对的EPMAC地址
+//quar 表示是否启用隔离模式，可选，也可为nil
+
+//虚拟外部网络接口（Virtual External Interface，简称 VEX）通常是一种面向物理网络的虚拟网络接口，它用于实现虚拟机或者容器与物理网络之间的通信。当虚拟机或者容器需要访问外部网络资源时，它们会通过 VEX 接口将数据包发送到物理网络上，并由物理交换机或路由器等设备进行转发和处理。因此，VEX 接口通常要与物理网络上的 VLAN、IP 地址、MAC 地址等相关信息相对应，以便确保其能够正确地与物理网络进行通信。
+//虚拟内部网络接口（Virtual Internal Interface，简称 VIN）则是一种纯虚拟化的网络接口，它主要用于实现虚拟机或者容器之间的通信。VIN 接口通常只存在于虚拟网络中，它们可以在同一物理主机上的不同虚拟机或容器之间直接进行通信，而无需经过任何物理网络设备的转发和处理。因此，VIN 接口通常不需要与物理网络相关的信息，如 VLAN、IP 地址等。
+//在 NeuVector 中，这两种接口类型常常会被用来配置和管理不同的端口对、流量转发规则等网络安全策略。
+
+//EPMAC 是一种特殊类型的 MAC 地址，它用于标识虚拟网络中的端口对。EPMAC 的全称是 "External Port MAC"，即外部端口 MAC 地址。在虚拟网络中，每个端口对（Port Pair）都会被分配一个唯一的 EPMAC 地址，该地址用于标识该端口对的位置以及与之关联的虚拟机或者容器等资源。EPMAC 地址通常是由虚拟网络管理软件自动分配和管理的，并且不同的虚拟化平台可能采用不同的 EPMAC 分配策略。在 NeuVector 中，EPMAC 地址被用作安全性检测的重要依据，从而确保集群中的所有网络流量都能够被准确地追踪和监测。
+
+//最终，当 NeuVector 代理收到该请求后，会根据请求中的信息添加一个新的端口对，并将其与相应的 EPMAC 地址关联起来。如果启用隔离模式，则该端口对将被放置在一个单独的隔离网络中，以便更好地控制和监测网络流量。
 func DPCtrlAddPortPair(vex_iface, vin_iface string, epmac net.HardwareAddr, quar *bool) {
 	data := DPAddPortPairReq{
 		AddPortPair: &DPPortPair{
@@ -347,6 +369,7 @@ func DPCtrlAddPortPair(vex_iface, vin_iface string, epmac net.HardwareAddr, quar
 	dpSendMsg(msg)
 }
 
+//##用于向neuvector代理发送删除端口对的请求
 func DPCtrlDelPortPair(vex_iface, vin_iface string) {
 	data := DPDelPortPairReq{
 		DelPortPair: &DPPortPair{
@@ -358,11 +381,17 @@ func DPCtrlDelPortPair(vex_iface, vin_iface string) {
 	dpSendMsg(msg)
 }
 
+//##用于向neuvector代理发送查询mac地址统计信息的请求
+//macs 表示要查询的mac地址列表
+//cb 表示回调函数，用于在neuvector返回结果后异步处理结果
+//param 表示传递给回调函数的参数
+
+//最终，当 NeuVector 代理收到该请求后，会根据请求中的 MAC 地址信息查询相应的统计信息，并将结果返回给调用方。回调函数 cb 将在 NeuVector 返回结果后被异步执行，并将查询结果作为参数传递进来，以供调用方进一步处理和分析。
 func DPCtrlStatsMAC(macs []*net.HardwareAddr, cb DPCallback, param interface{}) {
 	log.WithFields(log.Fields{"macs": macs}).Debug("")
 
 	var dp_macs []string
-	for _, mac := range macs {
+	for _, mac := range macs {   //将macs切片中的每个mac地址转换为字符串格式
 		dp_macs = append(dp_macs, mac.String())
 	}
 
@@ -373,6 +402,11 @@ func DPCtrlStatsMAC(macs []*net.HardwareAddr, cb DPCallback, param interface{}) 
 	dpSendMsgEx(msg, 5, cb, param)
 }
 
+
+//##用于向neuvector代理发送查询代理节点统计信息的请求
+//cb 表示回调函数，用于neuvector返回结果后异步处理结果
+//param 表示传递给回调函数的参数
+//最终，当 NeuVector 代理收到该请求后，会根据请求中的信息查询代理节点的统计信息，并将结果返回给调用方。回调函数 cb 将在 NeuVector 返回结果后被异步执行，并将查询结果作为参数传递进来，以供调用方进一步处理和分析。
 func DPCtrlStatsAgent(cb DPCallback, param interface{}) {
 	log.Debug("")
 
