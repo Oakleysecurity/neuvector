@@ -4,34 +4,34 @@ import (
 	"net"
 )
 
-const DPServer string = "/tmp/dp_listen.sock"
+const DPServer string = "/tmp/dp_listen.sock"   //表示DP控制套接字的路径
 
 type DPEmpty struct {
 }
 
 type DPKeepAlive struct {
-	SeqNum uint32 `json:"seq_num"`
+	SeqNum uint32 `json:"seq_num"`  //包含一个序列号字段 SeqNum 的结构体，用于表示 DP 控制通道的心跳包
 }
 
 type DPKeepAliveReq struct {
-	Alive *DPKeepAlive `json:"ctrl_keep_alive"`
+	Alive *DPKeepAlive `json:"ctrl_keep_alive"`  //表示发送 DP 心跳包的请求
 }
 
-type DPTapPort struct {
+type DPTapPort struct {   //表示要添加或删除的 Tap 端口的相关信息
 	NetNS string `json:"netns"`
 	Iface string `json:"iface"`
 	EPMAC string `json:"epmac"`
 }
 
-type DPAddTapPortReq struct {
+type DPAddTapPortReq struct {   //表示添加 Tap 端口的请求
 	AddPort *DPTapPort `json:"ctrl_add_tap_port"`
 }
 
-type DPDelTapPortReq struct {
+type DPDelTapPortReq struct {  //表示删除 Tap 端口的请求。
 	DelPort *DPTapPort `json:"ctrl_del_tap_port"`
 }
 
-type DPNfqPort struct {
+type DPNfqPort struct {  //表示要添加或删除的 Nfq 端口的相关信息。
 	NetNS 		string `json:"netns"`
 	Iface 		string `json:"iface"`
 	Qnum		int    `json:"qnum"`
@@ -39,11 +39,11 @@ type DPNfqPort struct {
 	JumboFrame	*bool  `json:"jumboframe,omitempty"`
 }
 
-type DPAddNfqPortReq struct {
+type DPAddNfqPortReq struct {  //表示添加 Nfq 端口的请求。
 	AddNfqPort *DPNfqPort `json:"ctrl_add_nfq_port"`
 }
 
-type DPDelNfqPortReq struct {
+type DPDelNfqPortReq struct {  //表示删除 Nfq 端口的请求。
 	DelNfqPort *DPNfqPort `json:"ctrl_del_nfq_port"`
 }
 
