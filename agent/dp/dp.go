@@ -99,19 +99,19 @@ func dpMsgThreatLog(msg []byte) {
 		jlog.Tap = true
 	}
 	EPMAC := net.HardwareAddr(C.GoBytes(unsafe.Pointer(&tlog.EPMAC[0]), 6))
-	switch jlog.EtherType {
-	case syscall.ETH_P_IP:
+	switch jlog.EtherType {  
+	case syscall.ETH_P_IP:  //当jlog.EtherType的值为syscall.ETH_P_IP时，表示该威胁日志对应的是 IPv4 协议类型的数据包
 		jlog.SrcIP = net.IP(C.GoBytes(unsafe.Pointer(&tlog.SrcIP[0]), 4))
 		jlog.DstIP = net.IP(C.GoBytes(unsafe.Pointer(&tlog.DstIP[0]), 4))
-	case syscall.ETH_P_IPV6:
+	case syscall.ETH_P_IPV6:  //当jlog.EtherType的值为syscall.ETH_P_IPV6时，表示该威胁日志对应的是 IPv4 协议类型的数据包
 		jlog.SrcIP = net.IP(C.GoBytes(unsafe.Pointer(&tlog.SrcIP[0]), 16))
 		jlog.DstIP = net.IP(C.GoBytes(unsafe.Pointer(&tlog.DstIP[0]), 16))
 	}
 	switch jlog.IPProto {
-	case syscall.IPPROTO_TCP, syscall.IPPROTO_UDP:
+	case syscall.IPPROTO_TCP, syscall.IPPROTO_UDP: //当 jlog.IPProto 的值为 syscall.IPPROTO_TCP 或 syscall.IPPROTO_UDP 时，表示该威胁日志对应的是 TCP 或 UDP 协议类型的数据包
 		jlog.SrcPort = uint16(tlog.SrcPort)
 		jlog.DstPort = uint16(tlog.DstPort)
-	case syscall.IPPROTO_ICMP, syscall.IPPROTO_ICMPV6:
+	case syscall.IPPROTO_ICMP, syscall.IPPROTO_ICMPV6: //当 jlog.IPProto 的值为 syscall.IPPROTO_ICMP 或 syscall.IPPROTO_ICMPV6 时，表示该威胁日志对应的是 ICMP 或 ICMPv6 协议类型的数据包
 		jlog.ICMPCode = uint8(tlog.ICMPCode)
 		jlog.ICMPType = uint8(tlog.ICMPType)
 	}
@@ -123,9 +123,11 @@ func dpMsgThreatLog(msg []byte) {
 	jlog.Packet = base64.StdEncoding.EncodeToString(pkt)
 
 	task := DPTask{Task: DP_TASK_THREAT_LOG, SecLog: &jlog, MAC: EPMAC}
-	taskCallback(&task)
+	taskCallback(&task)  //回调函数处理解析后的数据
 }
 
+//##用于解析 DP 数据包中的连接信息（即 C.DPMsgConnectHdr 和 C.DPMsgConnect）
+//msg 表示需要解析的DP数据包
 func dpMsgConnection(msg []byte) {
 	var connHdr C.DPMsgConnectHdr
 	var conn C.DPMsgConnect
@@ -138,12 +140,12 @@ func dpMsgConnection(msg []byte) {
 	}
 
 	r := bytes.NewReader(msg)
-	binary.Read(r, binary.BigEndian, &connHdr)
+	binary.Read(r, binary.BigEndian, &connHdr)   //现从msg中读取并解析DP连接消息头connHdr，其中包含了连接数等信息
 
 	// Verify total length
 	count := int(connHdr.Connects)
-	totalLen := connHdrLen + int(unsafe.Sizeof(conn))*count
-	if len(msg) != totalLen {
+	totalLen := connHdrLen + int(unsafe.Sizeof(conn))*count   //计算连接数据的总长度
+	if len(msg) != totalLen {   //校验接收到的数据长度和计算的是否一致，来检查数据包是否完整
 		log.WithFields(log.Fields{
 			"connects": count, "expect": totalLen, "actual": len(msg),
 		}).Error("Wrong message length.")
@@ -152,23 +154,23 @@ func dpMsgConnection(msg []byte) {
 
 	conns := make([]*ConnectionData, count)
 
-	for i := 0; i < count; i++ {
+	for i := 0; i < count; i++ {   //遍历所有连接数据，并依次解析每个连接数据，将其转换为Connection类型的结构体
 		binary.Read(r, binary.BigEndian, &conn)
 
 		cc := &Connection{
-			ServerPort:   uint16(conn.ServerPort),
-			ClientPort:   uint16(conn.ClientPort),
-			IPProto:      uint8(conn.IPProto),
-			Bytes:        uint64(conn.Bytes),
-			Sessions:     uint32(conn.Sessions),
-			FirstSeenAt:  uint32(conn.FirstSeenAt),
-			LastSeenAt:   uint32(conn.LastSeenAt),
-			ThreatID:     uint32(conn.ThreatID),
-			Severity:     uint8(conn.Severity),
-			PolicyAction: uint8(conn.PolicyAction),
-			Application:  uint32(conn.Application),
-			PolicyId:     uint32(conn.PolicyId),
-			Violates:     uint32(conn.Violates),
+			ServerPort:   uint16(conn.ServerPort),  //服务器端口
+			ClientPort:   uint16(conn.ClientPort),  //客户端口
+			IPProto:      uint8(conn.IPProto),  //IP协议类型，如tcp，udp等
+			Bytes:        uint64(conn.Bytes),  //连接字节数
+			Sessions:     uint32(conn.Sessions), //sessions连接会话数
+			FirstSeenAt:  uint32(conn.FirstSeenAt),  //首次发现时间戳
+			LastSeenAt:   uint32(conn.LastSeenAt),  //最后一次发现时间戳
+			ThreatID:     uint32(conn.ThreatID),  //威胁ID
+			Severity:     uint8(conn.Severity),  //威胁严重程度
+			PolicyAction: uint8(conn.PolicyAction),  //策略动作
+			Application:  uint32(conn.Application),  //应用程序ID
+			PolicyId:     uint32(conn.PolicyId),  //策略ID
+			Violates:     uint32(conn.Violates),  //违反的规则数
 		}
 		switch uint16(conn.EtherType) {
 		case syscall.ETH_P_IP:
@@ -211,9 +213,12 @@ func dpMsgConnection(msg []byte) {
 	}
 
 	task := DPTask{Task: DP_TASK_CONNECTION, Connects: conns}
-	taskCallback(&task)
+	taskCallback(&task)    //回调函数处理解析后的数据
 }
 
+
+//##用于解析 DP 数据包中的 FQDN 和 IP 地址信息（即 C.DPMsgFqdnIpHdr 和 C.DPMsgFqdnIp）
+//msg 表示需要解析的DP数据
 func dpMsgFqdnIpUpdate(msg []byte) {
 	var fqdnIpHdr C.DPMsgFqdnIpHdr
 	var fqdnIp C.DPMsgFqdnIp
@@ -225,7 +230,7 @@ func dpMsgFqdnIpUpdate(msg []byte) {
 	}
 
 	r := bytes.NewReader(msg)
-	binary.Read(r, binary.BigEndian, &fqdnIpHdr)
+	binary.Read(r, binary.BigEndian, &fqdnIpHdr)   //读取并解析msg中的DP FQDN和IP地址消息头
 
 	// Verify total length
 	ipcnt := int(fqdnIpHdr.IpCnt)
@@ -237,22 +242,24 @@ func dpMsgFqdnIpUpdate(msg []byte) {
 		return
 	}
 
-	fqdns := &share.CLUSFqdnIp{
+	fqdns := &share.CLUSFqdnIp{    
 		FqdnIP: make([]net.IP, 0),
 	}
 
-	fqdns.FqdnName = C.GoString(&fqdnIpHdr.FqdnName[0])
+	fqdns.FqdnName = C.GoString(&fqdnIpHdr.FqdnName[0])   //解析出FQDN名称
 
 	for i := 0; i < ipcnt; i++ {
 		binary.Read(r, binary.BigEndian, &fqdnIp)
-		fqdns.FqdnIP = append(fqdns.FqdnIP, net.IP(C.GoBytes(unsafe.Pointer(&fqdnIp.FqdnIP[0]), 4)))
+		fqdns.FqdnIP = append(fqdns.FqdnIP, net.IP(C.GoBytes(unsafe.Pointer(&fqdnIp.FqdnIP[0]), 4)))  //循环遍历出所有IP地址，并添加到fqdns.FqdnIP中
 	}
 	log.WithFields(log.Fields{"fqdns": fqdns}).Debug("")
 
 	task := DPTask{Task: DP_TASK_FQDN_IP, Fqdns: fqdns}
-	taskCallback(&task)
+	taskCallback(&task)  //函数创建了一个 DPTask 类型的变量 task，并将其填充为 DP_TASK_FQDN_IP 类型的任务，并将 fqdns 存储在 task 中。然后，函数调用之前设置的全局回调函数 taskCallback，并传递 task 变量作为参数，以执行相应的任务处理逻辑。
 }
 
+//##用于解析 DP 数据包的消息头
+//msg 表示需要解析的DP数据包
 func ParseDPMsgHeader(msg []byte) *C.DPMsgHdr {
 	var hdr C.DPMsgHdr
 
@@ -263,7 +270,7 @@ func ParseDPMsgHeader(msg []byte) *C.DPMsgHdr {
 	}
 
 	r := bytes.NewReader(msg)
-	binary.Read(r, binary.BigEndian, &hdr)
+	binary.Read(r, binary.BigEndian, &hdr)  //从msg中读取并解析DP消息头hdr，其中包含了消息类型，消息长度等信息
 	if int(hdr.Length) != len(msg) {
 		log.WithFields(log.Fields{
 			"kind": hdr.Kind, "expect": hdr.Length, "actual": len(msg),
@@ -271,9 +278,11 @@ func ParseDPMsgHeader(msg []byte) *C.DPMsgHdr {
 		return nil
 	}
 
-	return &hdr
+	return &hdr   //返回hdr的指针
 }
 
+//##用于处理 DP 数据包中的消息，判断消息类型，调用函数解析处理
+//msg 表示需要处理的DP数据包
 func dpMessenger(msg []byte) {
 	hdr := ParseDPMsgHeader(msg)
 	if hdr == nil {
@@ -283,16 +292,18 @@ func dpMessenger(msg []byte) {
 	offset := int(unsafe.Sizeof(*hdr))
 	switch int(hdr.Kind) {
 	case C.DP_KIND_APP_UPDATE:
-		dpMsgAppUpdate(msg[offset:])
+		dpMsgAppUpdate(msg[offset:])  //如果 hdr.Kind 的值为 C.DP_KIND_APP_UPDATE，则说明接下来的数据部分是应用程序信息更新消息，函数调用 dpMsgAppUpdate 函数进行处理
 	case C.DP_KIND_THREAT_LOG:
-		dpMsgThreatLog(msg[offset:])
+		dpMsgThreatLog(msg[offset:])  //如果 hdr.Kind 的值为 C.DP_KIND_THREAT_LOG，则说明接下来的数据部分是威胁日志消息，函数调用 dpMsgThreatLog 函数进行处理
 	case C.DP_KIND_CONNECTION:
-		dpMsgConnection(msg[offset:])
+		dpMsgConnection(msg[offset:])  //如果 hdr.Kind 的值为 C.DP_KIND_CONNECTION，则说明接下来的数据部分是连接信息消息，函数调用 dpMsgConnection 函数进行处理
 	case C.DP_KIND_FQDN_UPDATE:
-		dpMsgFqdnIpUpdate(msg[offset:])
+		dpMsgFqdnIpUpdate(msg[offset:])  //如果 hdr.Kind 的值为 C.DP_KIND_FQDN_UPDATE，则说明接下来的数据部分是 FQDN 和 IP 地址信息更新消息，函数调用 dpMsgFqdnIpUpdate 函数进行处理。
 	}
 }
 
+
+//##用于监听 DP 控制套接字，并解析收到的 DP 数据包。
 func listenDP() {
 	log.Debug("Listening to CTRL socket ...")
 
@@ -302,10 +313,10 @@ func listenDP() {
 	kind := "unixgram"
 	addr := net.UnixAddr{ctrlServer, kind}
 	defer os.Remove(ctrlServer)
-	conn, _ = net.ListenUnixgram(kind, &addr)
+	conn, _ = net.ListenUnixgram(kind, &addr)   //创建一个unix套接字，并将其绑定到本地地址ctrlServer上
 	defer conn.Close()
 
-	for {
+	for {  //不断读取从控制套接字中接收到的数据
 		var buf [C.DP_MSG_SIZE]byte
 		n, err := conn.Read(buf[:])
 		if err != nil {
