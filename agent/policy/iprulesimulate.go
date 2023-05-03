@@ -14,18 +14,22 @@ import (
 )
 
 //test a large number of ip rules being deployed in a single ep
-const ENODEMAX int = 80//number of nodes
-const EWLPERNODEMAX int = 250//number of wl per node
-const SIMULATEFREQ int = 3//every SIMULATEFREQ wl, add large number of ip rules
-const UDPFREQ int = 25
-const FQDNFREQ1 int = 15
+const ENODEMAX int = 80//number of nodes    //表示 EP 中最大节点数。
+const EWLPERNODEMAX int = 250//number of wl per node  //表示每个节点最大的白名单数。
+const SIMULATEFREQ int = 3//every SIMULATEFREQ wl, add large number of ip rules  //表示对每个白名单进行模拟规则操作的频率。
+const UDPFREQ int = 25  //表示 UDP 流量处理规则的频率。
+const FQDNFREQ1 int = 15   //分别表示不同类型 FQDN 规则的处理频率。
 const FQDNFREQ2 int = 35
 const FQDNFREQ3 int = 45
-const APPFREQ1 int = 12
+const APPFREQ1 int = 12  //分别表示不同类型应用程序规则的处理频率。
 const APPFREQ2 int = 13
 const APPFREQ3 int = 14
 
 var gSimCnt int = 0
+
+//##主要作用是模拟在 DPWorkloadIPPolicy 中添加大量的 IP 规则
+//policy 是一个指向 DPWorkloadIPPolicy 结构体的指针，它表示一种基于 IP 规则的安全策略。该结构体可以用来控制网络流量，限制源/目标 IP 地址、端口号、协议类型等访问范围，从而实现对网络安全的管理和防护。
+//applyDir 是一个整数类型，表示策略的应用方向。它可以取三个值：INGRESS、EGRESS 和 ALL，分别表示入站、出站和所有方向。在实际使用中，可以根据具体的需求来选择不同的应用方向，以达到相应的安全防护效果。
 func simulateAddLargeNumIPRules(policy *dp.DPWorkloadIPPolicy, applyDir int) {
 	//log.WithFields(log.Fields{"simcnt": gSimCnt}).Debug("")
 	if gSimCnt % SIMULATEFREQ == 0 {
@@ -36,7 +40,7 @@ func simulateAddLargeNumIPRules(policy *dp.DPWorkloadIPPolicy, applyDir int) {
 	}
 	var aIP, aIPR net.IP
 	if applyDir&C.DP_POLICY_APPLY_EGRESS > 0 {
-		for _, iprule := range policy.IPRules {
+		for _, iprule := range policy.IPRules {  //遍历每一条规则，取出IP
 			if iprule.Ingress == false {
 				aIP = iprule.SrcIP
 				aIPR = iprule.SrcIPR
@@ -83,7 +87,7 @@ func simulateAddLargeNumIPRules(policy *dp.DPWorkloadIPPolicy, applyDir int) {
 				rule.Ingress = true
 			}
 
-			if ((i + 1) * (j + 1)) % UDPFREQ == 0 {
+			if ((i + 1) * (j + 1)) % UDPFREQ == 0 {   //判断是否为udp流量
 				rule.IPProto = syscall.IPPROTO_UDP
 			}
 
@@ -179,7 +183,7 @@ func simulateAddLargeNumIPRules(policy *dp.DPWorkloadIPPolicy, applyDir int) {
 			}
 
 			//log.WithFields(log.Fields{"rule": rule}).Debug("")
-			policy.IPRules = append(policy.IPRules, &rule)
+			policy.IPRules = append(policy.IPRules, &rule)   //在确定了规则类型和属性之后，将规则添加到IPRules列表中
 			ipRuleMap[key] = &rule
 		}
 	}
