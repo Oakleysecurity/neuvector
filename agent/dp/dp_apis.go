@@ -210,12 +210,12 @@ type DPPolicyIPRule struct {
 }
 
 type DPWorkloadIPPolicy struct {
-	WlID        string            `json:"wl_id"`
-	Mode        string            `json:"mode"`
-	DefAction   uint8             `json:"defact"`
-	ApplyDir    int               `json:"apply_dir"`
-	WorkloadMac []string          `json:"mac"`
-	IPRules     []*DPPolicyIPRule `json:"policy_rules"`
+	WlID        string            `json:"wl_id"`   //表示所针对的工作负载。
+	Mode        string            `json:"mode"`     //表示该策略的模式（例如防火墙、入侵检测等）。
+	DefAction   uint8             `json:"defact"`   //表示默认动作。
+	ApplyDir    int               `json:"apply_dir"`  //表示策略应用的方向（INGRESS、EGRESS 或 ALL）。
+	WorkloadMac []string          `json:"mac"`     //表示工作负载的 MAC 地址。
+	IPRules     []*DPPolicyIPRule `json:"policy_rules"`  //表示针对 IP 规则的策略列表。
 }
 
 type DPPolicyCfg struct {
