@@ -9,9 +9,9 @@ import (
 	"encoding/binary"
 	"net"
 	"os"
-	"syscall"
-	"time"
-	"unsafe"
+	"syscall"   //提供了底层系统调用相关的函数和类型定义，例如 Socket、Connect、Sendto、Recvfrom 等。可以用于实现底层的网络通信、进程管理等操作。
+	"time"   //提供了时间相关的函数和类型定义，例如 Time、Now、Sleep 等。可以用于计时、延迟执行、获取当前时间等操作。
+	"unsafe"  //提供了与指针和内存相关的函数和类型定义，例如 Pointer、Sizeof、Offsetof 等。可以用于进行底层的内存操作和转换，例如将数据类型转换为字节序列并进行强制类型转换。
 
 	log "github.com/sirupsen/logrus"
 
@@ -19,9 +19,11 @@ import (
 	"github.com/neuvector/neuvector/share/utils"
 )
 
+//##用于解析 DP 数据包中应用程序信息的函数。
+//msg 表示需要解析的DP数据包
 func dpMsgAppUpdate(msg []byte) {
-	var appHdr C.DPMsgAppHdr
-	var app C.DPMsgApp
+	var appHdr C.DPMsgAppHdr   //表示DP应用程序消息头部，保存了MAX地址和端口数等基本信息
+	var app C.DPMsgApp        //表示DP应用程序消息内容，保存了应用程序的详细信息，如协议号、服务类型、应用程序ID等
 
 	// Verify header length
 	appHdrLen := int(unsafe.Sizeof(appHdr))
@@ -31,7 +33,7 @@ func dpMsgAppUpdate(msg []byte) {
 	}
 
 	r := bytes.NewReader(msg)
-	binary.Read(r, binary.BigEndian, &appHdr)
+	binary.Read(r, binary.BigEndian, &appHdr)  //对msg进行读取
 
 	// Verify total length
 	ports := int(appHdr.Ports)
@@ -52,7 +54,7 @@ func dpMsgAppUpdate(msg []byte) {
 			Port:    uint16(app.Port),
 			IPProto: uint8(app.IPProto),
 		}
-		apps[p] = &share.CLUSApp{
+		apps[p] = &share.CLUSApp{  //将读取的详细信息存储在名为apps的map类型变量中
 			CLUSProtoPort: p,
 			Proto:         uint32(app.Proto),
 			Server:        uint32(app.Server),
@@ -60,8 +62,8 @@ func dpMsgAppUpdate(msg []byte) {
 		}
 	}
 
-	task := DPTask{Task: DP_TASK_APPLICATION, MAC: mac, Apps: apps}
-	taskCallback(&task)
+	task := DPTask{Task: DP_TASK_APPLICATION, MAC: mac, Apps: apps}  //创建了一个 DPTask 类型的变量 task，并将其填充为 DP_TASK_APPLICATION 类型的任务，并将 mac 和 apps 存储在 task 中
+	taskCallback(&task)  //调用之前设置的全局回调函数 taskCallback，并传递 task 变量作为参数，以执行相应的任务处理逻辑。
 }
 
 func dpMsgThreatLog(msg []byte) {
