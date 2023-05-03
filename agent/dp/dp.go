@@ -66,22 +66,25 @@ func dpMsgAppUpdate(msg []byte) {
 	taskCallback(&task)  //调用之前设置的全局回调函数 taskCallback，并传递 task 变量作为参数，以执行相应的任务处理逻辑。
 }
 
+
+//##用于解析 DP 数据包中威胁日志信息的函数
+//msg 表示需要解析的DP数据包
 func dpMsgThreatLog(msg []byte) {
-	var tlog C.DPMsgThreatLog
+	var tlog C.DPMsgThreatLog   //表示 DP 威胁日志消息的内容
 
 	r := bytes.NewReader(msg)
-	binary.Read(r, binary.BigEndian, &tlog)
+	binary.Read(r, binary.BigEndian, &tlog)  //读取msg和解析
 
 	jlog := share.CLUSThreatLog{
-		ID:          utils.GetTimeUUID(time.Now().UTC()),
-		ThreatID:    uint32(tlog.ThreatID),
-		Count:       uint32(tlog.Count),
-		Action:      uint8(tlog.Action),
-		Severity:    uint8(tlog.Severity),
-		EtherType:   uint16(tlog.EtherType),
-		IPProto:     uint8(tlog.IPProto),
-		Application: uint32(tlog.Application),
-		CapLen:      uint16(tlog.CapLen),
+		ID:          utils.GetTimeUUID(time.Now().UTC()),   //表示威胁日志的唯一标识符，使用 utils.GetTimeUUID 函数生成一个新的 UUID。
+		ThreatID:    uint32(tlog.ThreatID),  //表示威胁 ID，其值等于 tlog.ThreatID。
+		Count:       uint32(tlog.Count),   //表示触发次数，其值等于 tlog.Count。
+		Action:      uint8(tlog.Action),   //表示威胁的动作，例如阻止、允许、告警等，其值等于 tlog.Action。
+		Severity:    uint8(tlog.Severity),   //表示威胁的严重程度，其值等于 tlog.Severity。
+		EtherType:   uint16(tlog.EtherType),   //表示以太网帧中的协议类型，例如 IPv4、IPv6 等，其值等于 tlog.EtherType。
+		IPProto:     uint8(tlog.IPProto),    //表示 IP 协议类型，例如 TCP、UDP、ICMP 等，其值等于 tlog.IPProto。
+		Application: uint32(tlog.Application),   //表示应用程序 ID，其值等于 tlog.Application。
+		CapLen:      uint16(tlog.CapLen),   //表示抓包数据的长度，其值等于 tlog.CapLen。
 	}
 
 	jlog.ReportedAt = time.Unix(int64(tlog.ReportedAt), 0).UTC()
