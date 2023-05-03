@@ -1090,6 +1090,7 @@ func DPCtrlDlpCfgChgMac(delmacs utils.Set) {
 //##用作 NeuVector 代理和数据平面之间心跳包（keep-alive）的回调函数，在接收到心跳包响应时被调用
 //buf 表示收到的心跳包消息
 //param 表示用户自定义的参数
+//总的来说，cbKeepAlive() 函数是用于处理 NeuVector 代理和数据平面之间心跳包的回调函数，它通过比较序列号来判断心跳包是否匹配，从而保证连接的可靠性。
 func cbKeepAlive(buf []byte, param interface{}) bool {
 	if len(buf) == 0 {
 		log.Error("Empty message, close dp socket")
@@ -1124,6 +1125,7 @@ func cbKeepAlive(buf []byte, param interface{}) bool {
 	return false    //函数会返回 false，表示需要继续等待下一个心跳包响应。
 }
 
+//##用于向数据平面发送心跳包（keep-alive），以便保持和数据平面之间的连接状态。
 func dpKeepAlive() {
 	keepAliveSeq++
 	seq := keepAliveSeq
@@ -1134,16 +1136,37 @@ func dpKeepAlive() {
 	dpSendMsgExSilent(msg, 3, cbKeepAlive, &seq)
 }
 
+//##于监控数据平面（Data Plane）的连接状态，并在需要时尝试连接或者重连到数据平面，同时定期发送心跳包以保持连接。
+//goroutine：在 Go 语言中，goroutine 是一种轻量级的线程实现，可以让开发者方便地进行并发编程。具体来说，goroutine 可以看作是 Go 程序的执行单元，它独立于操作系统的线程管理机制，并由 Go 运行时系统负责调度和管理。
+/*
+channel是什么？
+在 Go 语言中，channel 是一种用于在 goroutine 之间进行通信和同步的数据类型。具体来说，channel 可以用于让一个 goroutine 发送指定类型的数据到另一个 goroutine，并在发送和接收数据时实现同步操作。
+在 Go 中，channel 的类型可以是任意类型，它们可以被创建、关闭、读取和写入。使用 channel 进行通信时，发送和接收操作都是阻塞式的，即当没有数据可读或者无法将数据写入 channel 时，当前 goroutine 会被暂停并等待，直到 channel 准备好进行操作为止。
+下面是使用 channel 的常见操作：
+创建 channel：使用 make(chan T) 来创建一个新的 channel，其中 T 为 channel 能够传输的元素类型。
+发送数据到 channel：使用 <- ch <- value 的方式向 channel ch 中发送一个值 value。
+接收 channel 中的数据：使用 value := <- ch 的方式从 channel ch 中接收一个值，并将其保存到变量 value 中。
+关闭 channel：使用 close(ch) 的方式关闭 channel，以告知所有的接收方 channel 已经不再有新的数据产生。
+需要注意的是，在使用 channel 进行通信时，需要避免死锁和资源泄漏等问题，并采取适当的措施确保程序的正确性和稳定性。
+具体来说，channel 可以被用作生产者-消费者模式、事件驱动等场景，实现不同 goroutine 之间的数据传递和同步操作。
+*/
+/*
+select 语句
+select 语句是 Go 语言中一种用于处理异步 IO 的控制结构，它可以同时监听多个 channel 的状态，并在其中一个 channel 准备好读写时立即执行相应的操作。
+具体来说，select 语句由多个 case 子句组成，每个 case 子句包含一个 channel 的输入或输出操作，如 ch <- value 或者 <-ch。当 select 语句被执行时，它会按照顺序依次检查每个 case 子句所关联的 channel 是否已经准备好进行 IO 操作，如果某个 channel 准备好了，则执行该 channel 对应的代码块，否则继续等待。
+select 语句的特点是非阻塞式的，即当所有 channel 都没有准备好进行 IO 操作时，它不会阻塞程序的执行，而是直接跳过整个 select 结构体并进入下一轮循环，以便进行其他任务。这使得 select 语句非常适合用于处理异步 IO、超时等场景，提高了程序的并发性和响应性能。
+在实际应用中，select 语句通常与 goroutine 配合使用，用于处理多个 IO 操作、网络请求、定时器等任务，并通过 channel 进行数据交换和同步，实现高效的并发编程。
+*/
 func monitorDP() {
-	dpTicker := time.Tick(dpKeepAliveInterval)
+	dpTicker := time.Tick(dpKeepAliveInterval)  //生成一个定时器
 	dpConnJamRetry := 0
 
-	for {
+	for {   //无限循环
 		select {
-		case <-dpTicker:
+		case <-dpTicker:  //表示从 channel dpTicker 中读取数据，这个操作会阻塞当前 goroutine 直到 channel 中有数据可读。
 			// Connect to DP if not; keep alive is connected.
-			if dpConn == nil {
-				if dpConnJamRetry > dpConnJamRetryMax {
+			if dpConn == nil {   //若当前未与数据平面（data plane）建立连接
+				if dpConnJamRetry > dpConnJamRetryMax {   //如果超过重连最大次数则报错
 					log.WithFields(log.Fields{"retry": dpConnJamRetry}).Error("dp socket congestion.")
 					// log.WithFields(log.Fields{"retry": dpConnJamRetry}).Error("dp socket congestion. Exit!")
 					// restartChan <- nil
@@ -1151,12 +1174,12 @@ func monitorDP() {
 				}
 
 				log.WithFields(log.Fields{"retry": dpConnJamRetry}).Info("Connecting to DP socket ...")
-				newConn := connectDP()
-				if newConn != nil {
+				newConn := connectDP()   //尝试建立连接
+				if newConn != nil {   //若连接成功
 					dpClientLock()
-					dpConn = newConn
+					dpConn = newConn   //将连接指向dpConn
 					// align msg with DP using keep alive
-					dpKeepAlive()
+					dpKeepAlive()   //发送心跳包保持连接
 					dpClientUnlock()
 
 					if dpConn != nil {
@@ -1166,7 +1189,7 @@ func monitorDP() {
 					} else {
 						// This is to detect communication socket congestion, so only increment when
 						// connection is made.
-						dpConnJamRetry++
+						dpConnJamRetry++    //每尝试重连一次，计数器加一
 					}
 				} else {
 					dpConnJamRetry = 0
@@ -1189,23 +1212,26 @@ func monitorDP() {
 	}
 }
 
-func connectDP() *net.UnixConn {
-	var conn *net.UnixConn
-	var err error
-	kind := "unixgram"
-	lpath := getDPCtrlClientAddr()
-	laddr := net.UnixAddr{lpath, kind}
-	raddr := net.UnixAddr{DPServer, kind}
 
-	conn, err = net.DialUnix(kind, &laddr, &raddr)
-	if err != nil {
-		os.Remove(lpath)
+//##用于创建 Unix 套接字连接的函数，其主要功能是向指定地址的 Unix socket 建立连接，并返回一个 *net.UnixConn 类型的连接对象。
+func connectDP() *net.UnixConn {
+	var conn *net.UnixConn  //保存连接对象
+	var err error  //保存错误信息
+	kind := "unixgram"
+	lpath := getDPCtrlClientAddr()  //获取本地socket地址
+	laddr := net.UnixAddr{lpath, kind}   //转化为net.UninxAddr类型的变量laddr
+	raddr := net.UnixAddr{DPServer, kind}  //将目标socket地址（DPServer）转换为net.UnixAddr类型的变量raddr
+
+	conn, err = net.DialUnix(kind, &laddr, &raddr)   //建立socket连接
+	if err != nil {   //如果连接出错
+		os.Remove(lpath)   //删除本地socket并返回nil
 		return nil
 	} else {
 		return conn
 	}
 }
 
+//##用于关闭 Unix 套接字连接和删除本地 socket 文件的函数
 func closeDP() {
 	if dpConn != nil {
 		log.Info("DP Closed")
@@ -1215,15 +1241,19 @@ func closeDP() {
 	os.Remove(getDPCtrlClientAddr())
 }
 
+//##用于启动 DP 相关任务的函数，其中会创建两个 goroutine 分别用于监听 DP 数据包和监控 DP 连接状态
+//cb 表示在收到DP数据包时需要调用的回调函数
+//sc 表示用于向DP监控goroutine发送信号以查询DP连接状态
+//ec 表示用于监控goroutine返回的错误信息和重启信号
 func Open(cb DPTaskCallback, sc chan bool, ec chan interface{}) {
 	log.Info("")
 
-	taskCallback = cb
-	statusChan = sc
-	restartChan = ec
+	taskCallback = cb  //保存回调函数
+	statusChan = sc  //保存状态channel
+	restartChan = ec  //保存重启channel
 
-	go listenDP()
-	go monitorDP()
+	go listenDP()   //启用一个goroutine，来DP数据包监听
+	go monitorDP()  //启用一个goroutine，来连接状态监控
 }
 
 func Close() {
