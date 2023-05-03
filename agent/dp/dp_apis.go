@@ -206,7 +206,7 @@ type DPPolicyIPRule struct {
 	Action  uint8          `json:"action"`
 	Ingress bool           `json:"ingress"`
 	Fqdn    string         `json:"fqdn,omitempty"`
-	Apps    []*DPPolicyApp `json:"apps,omitempty"`
+	Apps    []*DPPolicyApp `json:"apps,omitempty"`  //指向 DPPolicyApp 结构体的指针数组类型，表示匹配的应用程序列表。
 }
 
 type DPWorkloadIPPolicy struct {
