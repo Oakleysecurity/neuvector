@@ -1119,13 +1119,13 @@ type CLUSPortApp struct {
 }
 
 type CLUSWorkloadAddr struct {
-	WlID         string        `json:"workload_id"`
-	PolicyMode   string        `json:"mode,omitempty"`
-	LocalIP      []net.IP      `json:"local_ip,omitempty"`
-	GlobalIP     []net.IP      `json:"global_ip,omitempty"`
-	NatIP        []net.IP      `json:"nat_ip,omitempty"`
-	LocalPortApp []CLUSPortApp `json:"local_port_app,omitempty"`
-	NatPortApp   []CLUSPortApp `json:"nat_port_app,omitempty"`
+	WlID         string        `json:"workload_id"`  //表示工作负载的唯一标识符。
+	PolicyMode   string        `json:"mode,omitempty"`  //表示工作负载的网络策略模式。
+	LocalIP      []net.IP      `json:"local_ip,omitempty"`  //表示本地IP地址列表。
+	GlobalIP     []net.IP      `json:"global_ip,omitempty"`  //表示全局IP地址列表。
+	NatIP        []net.IP      `json:"nat_ip,omitempty"`    //表示NAT映射的IP地址列表。
+	LocalPortApp []CLUSPortApp `json:"local_port_app,omitempty"`  //表示本地端口应用程序列表。
+	NatPortApp   []CLUSPortApp `json:"nat_port_app,omitempty"`   //表示NAT端口应用程序列表。
 }
 
 type CLUSGroupIPPolicy struct {
