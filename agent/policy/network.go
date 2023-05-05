@@ -802,15 +802,15 @@ func (e *Engine) parseGroupIPPolicy(p []share.CLUSGroupIPPolicy, workloadPolicyM
 //capIntcp 是否可以拦截
 func policyModeToDefaultAction(mode string, capIntcp bool) uint8 {
 	switch mode {
-	case share.PolicyModeLearn:
-		return C.DP_POLICY_ACTION_LEARN
-	case share.PolicyModeEvaluate:
-		return C.DP_POLICY_ACTION_VIOLATE
-	case share.PolicyModeEnforce:
-		if capIntcp {
-			return C.DP_POLICY_ACTION_DENY
+	case share.PolicyModeLearn:   //discover模式
+		return C.DP_POLICY_ACTION_LEARN  //学习动作
+	case share.PolicyModeEvaluate:  //monitor模式
+		return C.DP_POLICY_ACTION_VIOLATE  //违反动作
+	case share.PolicyModeEnforce:  //保护模式
+		if capIntcp {  //若可被拦截
+			return C.DP_POLICY_ACTION_DENY  //拒绝动作
 		} else {
-			return C.DP_POLICY_ACTION_VIOLATE
+			return C.DP_POLICY_ACTION_VIOLATE //否则，违反动作
 		}
 	}
 	//for a wl whose mode is empty/unknown
@@ -819,6 +819,14 @@ func policyModeToDefaultAction(mode string, capIntcp bool) uint8 {
 	return C.DP_POLICY_ACTION_OPEN
 }
 
+//##用于检查IP地址是否在指定的范围内。如果返回true，则表示给定的IP地址位于指定的范围内。
+/*
+ip：要比较的IP地址
+ipL：范围的左端点IP地址
+ipR：范围的右端点IP地址。如果为nil，则范围将被视为单个IP地址。
+external：一个bool值，指示是否允许匹配任何IP地址（当ipL为IPv4-zero地址时）。
+注：IPv4-zero就是0.0.0.0，表示任何地址
+*/
 func ipMatch(ip, ipL, ipR net.IP, external bool) bool {
 	if external && bytes.Compare(ipL, net.IPv4zero) == 0 {
 		return true
@@ -835,26 +843,36 @@ func ipMatch(ip, ipL, ipR net.IP, external bool) bool {
 	return false
 }
 
+//##用于检查连接是否匹配指定的网络策略规则的函数。
+/*
+参数：
+r：一条网络策略规则，包含规则ID、源IP地址范围、目标IP地址范围、端口号范围、协议类型和应用程序信息等。
+conn：一个连接对象，包含连接方向（入站或出站）、客户端IP地址、服务器IP地址、服务器端口号和协议类型等。
+返回值：
+一个bool值，指示连接是否匹配规则。
+一个uint32值，表示应用于连接的规则的ID。
+一个uint8值，表示应用于连接的规则的动作（允许或拒绝）。
+*/
 func hostPolicyMatch(r *dp.DPPolicyIPRule, conn *dp.Connection) (bool, uint32, uint8) {
-	if r.Ingress != conn.Ingress {
+	if r.Ingress != conn.Ingress { //检查连接方向是否与规则中指定的方向相匹配，如果不匹配，则返回false。
 		return false, 0, 0
 	}
 
-	if r.Ingress {
+	if r.Ingress {  //如果规则为入站规则，则检查连接的客户端IP地址是否在规则指定的源IP地址范围内，如果不在范围内，则返回false。
 		if ipMatch(conn.ClientIP, r.SrcIP, r.SrcIPR, conn.ExternalPeer) == false {
 			return false, 0, 0
 		}
-	} else if ipMatch(conn.ServerIP, r.DstIP, r.DstIPR, conn.ExternalPeer) == false {
+	} else if ipMatch(conn.ServerIP, r.DstIP, r.DstIPR, conn.ExternalPeer) == false { //如果规则为出站规则，则检查连接的服务器IP地址是否在规则指定的目标IP地址范围内，如果不在范围内，则返回false。
 		return false, 0, 0
 	}
-	if conn.ServerPort < r.Port || conn.ServerPort > r.PortR {
+	if conn.ServerPort < r.Port || conn.ServerPort > r.PortR { //检查连接的服务器端口号是否在规则指定的端口号范围内，如果不在范围内，则返回false。
 		return false, 0, 0
 	}
-	if r.IPProto > 0 && conn.IPProto != r.IPProto {
+	if r.IPProto > 0 && conn.IPProto != r.IPProto { //如果规则指定了协议类型（如TCP或UDP），则检查连接的协议类型是否与规则匹配，如果不匹配，则返回false。
 		return false, 0, 0
 	}
 
-	if r.Action == C.DP_POLICY_ACTION_CHECK_APP {
+	if r.Action == C.DP_POLICY_ACTION_CHECK_APP { //如果规则的动作为DP_POLICY_ACTION_CHECK_APP，则检查连接的应用程序是否匹配规则中指定的应用程序，如果匹配，则返回相应的规则ID和动作。
 		for _, app := range r.Apps {
 			if app.App == C.DP_POLICY_APP_ANY || app.App == conn.Application {
 				return true, app.RuleID, app.Action
@@ -863,33 +881,43 @@ func hostPolicyMatch(r *dp.DPPolicyIPRule, conn *dp.Connection) (bool, uint32, u
 		return false, 0, 0
 	}
 
-	return true, r.ID, r.Action
+	return true, r.ID, r.Action  //如果以上所有条件都符合，说明连接匹配规则，返回true和规则ID以及动作。
 }
 
+//##用于执行主机网络策略查找的函数。
+/*
+参数：
+wl：工作负载名称，用于查找与之关联的网络策略。
+conn：连接对象，包含连接方向、客户端IP地址、服务器IP地址、服务器端口号和协议类型等。
+返回值：
+一个uint32值，表示应用于连接的规则的ID。
+一个uint8值，表示应用于连接的规则的动作（允许或拒绝）。
+一个bool值，指示是否存在匹配的规则。
+*/
 func (e *Engine) HostNetworkPolicyLookup(wl string, conn *dp.Connection) (uint32, uint8, bool) {
-	e.Mutex.Lock()
+	e.Mutex.Lock()  //锁定引擎对象以进行并发安全处理。
 	pInfo := e.NetworkPolicy[wl]
 	e.Mutex.Unlock()
 
-	if pInfo == nil || !pInfo.Configured {
+	if pInfo == nil || !pInfo.Configured {  //获取与给定工作负载关联的网络策略信息。如果没有找到，则返回默认的开放动作（DP_POLICY_ACTION_OPEN）和false。
 		return 0, C.DP_POLICY_ACTION_OPEN, false
 	}
 
-	if conn.Ingress {
+	if conn.Ingress { //检查连接方向是否为入站或出站，然后根据相应的方向和网络策略中指定的应用方向确定是否应用此策略。如果不应用此策略，则返回默认的开放动作和false。
 		if !conn.ExternalPeer &&
 			(pInfo.Policy.ApplyDir&C.DP_POLICY_APPLY_INGRESS == 0) {
 			return 0, C.DP_POLICY_ACTION_OPEN, false
 		}
 
-		for _, p := range pInfo.Policy.IPRules {
+		for _, p := range pInfo.Policy.IPRules {  //遍历网络策略中的所有IP规则，并使用hostPolicyMatch方法检查连接是否匹配每个规则。
 			if !p.Ingress {
 				continue
 			}
-			if match, id, action := hostPolicyMatch(p, conn); match {
+			if match, id, action := hostPolicyMatch(p, conn); match {  //如果连接匹配某个规则，则返回该规则的ID和动作，并指示存在匹配的规则。
 				return id, action, action > C.DP_POLICY_ACTION_CHECK_APP
 			}
 		}
-	} else {
+	} else {  //如果以上所有条件都未命中，则使用网络策略中指定的模式（如强制、放行或警告）和是否启用了cap_intcp来确定默认动作，并返回默认动作和false。
 		if !conn.ExternalPeer &&
 			(pInfo.Policy.ApplyDir&C.DP_POLICY_APPLY_EGRESS == 0) {
 			return 0, C.DP_POLICY_ACTION_OPEN, false
@@ -909,48 +937,56 @@ func (e *Engine) HostNetworkPolicyLookup(wl string, conn *dp.Connection) (uint32
 	return 0, action, action > C.DP_POLICY_ACTION_CHECK_APP
 }
 
+//##用于更新网络策略的方法
+/*
+参数：
+ps：一个包含CLUSTER_GROUP_IP_POLICY信息的切片，用于解析群集级别的IP策略。
+newPolicy：一个包含工作负载级别的IP策略信息的map。key表示工作负载名称，value表示该工作负载的IP策略信息。
+返回值：
+该方法返回一个集合，包含需要通知探针进行策略更改的工作负载ID。
+*/
 func (e *Engine) UpdateNetworkPolicy(ps []share.CLUSGroupIPPolicy,
 	newPolicy map[string]*WorkloadIPPolicyInfo) utils.Set {
 
-	fqdnInfoPrePolicyCalc()
+	fqdnInfoPrePolicyCalc()  //在计算新的IP策略之前，调用fqdnInfoPrePolicyCalc方法计算FQDN信息。
 
-	newPolicyAddrMap := make(map[string]share.CLUSSubnet)
-	e.parseGroupIPPolicy(ps, newPolicy, newPolicyAddrMap)
+	newPolicyAddrMap := make(map[string]share.CLUSSubnet)  //创建一个新的子网名称和子网地址之间的映射关系的map。
+	e.parseGroupIPPolicy(ps, newPolicy, newPolicyAddrMap) //调用parseGroupIPPolicy方法解析群集级别的IP策略，并更新子网名称和子网地址之间的映射关系。
 
 	dpConnected := dp.Connected()
 
-	if dpConnected {
+	if dpConnected {  //如果已连接到DP，则调用fqdnInfoPostPolicyCalc方法计算FQDN信息。
 		fqdnInfoPostPolicyCalc(e.HostID)
 	}
 
 	// For host mode containers, we need to notify probe the policy change
 	hostPolicyChangeSet := utils.NewSet()
-	for id, pInfo := range newPolicy {
+	for id, pInfo := range newPolicy {  //对每个工作负载的IP策略进行处理：
 		// release the ruleMap as it is not needed anymore
-		pInfo.RuleMap = nil
+		pInfo.RuleMap = nil  
 
 		// For workload that is not configured, policy is not calculated yet.
 		// Don't send policy to DP so that DP will bypass the traffic
-		if pInfo.Configured == false {
+		if pInfo.Configured == false {  //如果工作负载未配置，则不发送其策略信息给DP，以便DP跳过流量。
 			continue
 		}
 
-		if pInfo.SkipPush {
+		if pInfo.SkipPush {  //如果该工作负载正在跳过策略推送，则继续到下一个工作负载。
 			continue
 		}
 
-		if old, ok := e.NetworkPolicy[id]; !ok {
+		if old, ok := e.NetworkPolicy[id]; !ok {  //如果该工作负载是新添加的工作负载，并且处于主机模式，则将其ID添加到工作负载ID集合中，以通知探针进行策略更改。
 			if pInfo.HostMode {
 				hostPolicyChangeSet.Add(id)
 			} else if dpConnected {
 				//simulateAddLargeNumIPRules(&pInfo.Policy, pInfo.Policy.ApplyDir)
 				dp.DPCtrlConfigPolicy(&pInfo.Policy, C.CFG_ADD)
 			}
-		} else if pInfo.Configured != old.Configured ||
+		} else if pInfo.Configured != old.Configured ||  //如果该工作负载之前已在网络策略中定义，但其策略信息已发生更改，则将其ID添加到工作负载ID集合中，以通知探针进行策略更改。
 			reflect.DeepEqual(&pInfo.Policy, &old.Policy) != true {
 			if pInfo.HostMode {
 				hostPolicyChangeSet.Add(id)
-			} else if dpConnected {
+			} else if dpConnected { //如果DP已连接，则调用DPCtrlConfigPolicy方法向DP发送新的或更改后的IP策略信息。注意，如果工作负载正在跳过策略推送，则不会发送其策略信息给DP。
 				//simulateAddLargeNumIPRules(&pInfo.Policy, pInfo.Policy.ApplyDir)
 				dp.DPCtrlConfigPolicy(&pInfo.Policy, C.CFG_MODIFY)
 			}
@@ -960,7 +996,7 @@ func (e *Engine) UpdateNetworkPolicy(ps []share.CLUSGroupIPPolicy,
 	//been pushed to DP, so that if there is early traffic at the DP
 	//if wl ip is not in addr map we know that policy is not yet pushed
 	//to DP so we can let action be OPEN
-	if reflect.DeepEqual(e.PolicyAddrMap, newPolicyAddrMap) == false {
+	if reflect.DeepEqual(e.PolicyAddrMap, newPolicyAddrMap) == false { //使用DP已连接并且新的子网名称和子网地址之间的映射关系与当前存储的映射关系不相同时，调用DPCtrlConfigPolicyAddr方法向DP发送新的映射关系。
 		dp.DPCtrlConfigPolicyAddr(newPolicyAddrMap)
 	}
 	// we don't do policy delete here as it only happens when workload is gone
@@ -973,6 +1009,7 @@ func (e *Engine) UpdateNetworkPolicy(ps []share.CLUSGroupIPPolicy,
 	return hostPolicyChangeSet
 }
 
+//##这是一个用于获取引擎对象的NetworkPolicy字段的方法。该方法不接受任何参数，返回一个包含工作负载级别IP策略信息的map。key表示工作负载名称，value表示该工作负载的IP策略信息。使用defer语句和Mutex互斥锁来保证多线程环境下访问引擎对象的并发安全性。
 func (e *Engine) GetNetworkPolicy() map[string]*WorkloadIPPolicyInfo {
 	e.Mutex.Lock()
 	defer e.Mutex.Unlock()
@@ -980,6 +1017,7 @@ func (e *Engine) GetNetworkPolicy() map[string]*WorkloadIPPolicyInfo {
 	return e.NetworkPolicy
 }
 
+//这是一个用于获取引擎对象的PolicyAddrMap字段的方法。该方法不接受任何参数，返回一个包含子网名称和子网地址之间的映射关系的map。key表示子网名称，value表示子网地址。使用defer语句和Mutex互斥锁来保证多线程环境下访问引擎对象的并发安全性。
 func (e *Engine) GetPolicyAddrMap() map[string]share.CLUSSubnet {
 	e.Mutex.Lock()
 	defer e.Mutex.Unlock()
@@ -987,6 +1025,7 @@ func (e *Engine) GetPolicyAddrMap() map[string]share.CLUSSubnet {
 	return e.PolicyAddrMap
 }
 
+//##这是一个用于删除引擎对象的NetworkPolicy字段中指定工作负载ID对应的IP策略信息的方法。该方法接受一个字符串类型的参数id，表示需要删除的工作负载ID。使用defer语句和Mutex互斥锁来保证多线程环境下访问引擎对象的并发安全性。
 func (e *Engine) DeleteNetworkPolicy(id string) {
 	e.Mutex.Lock()
 	defer e.Mutex.Unlock()
@@ -994,6 +1033,8 @@ func (e *Engine) DeleteNetworkPolicy(id string) {
 	delete(e.NetworkPolicy, id)
 }
 
+//用于将引擎对象的NetworkPolicy字段中的所有IP策略信息推送到DP
+//首先使用GetNetworkPolicy方法获取存储在引擎对象中的工作负载级别的IP策略信息的map。然后对于每个具有已配置标志的工作负载，如果其处于跳过策略推送状态，则继续到下一个工作负载；否则，调用DPCtrlConfigPolicy方法将其IP策略信息发送给DP。最后，使用GetPolicyAddrMap方法获取存储在引擎对象中的子网名称和子网地址之间的映射关系的map，然后调用DPCtrlConfigPolicyAddr方法将其发送给DP。
 func (e *Engine) PushNetworkPolicyToDP() {
 	log.Debug("")
 	np := e.GetNetworkPolicy()
@@ -1010,6 +1051,7 @@ func (e *Engine) PushNetworkPolicyToDP() {
 	dp.DPCtrlConfigPolicyAddr(policyAddr)
 }
 
+//##用于将引擎对象的FQDN信息推送到DP的方法。
 func (e *Engine) PushFqdnInfoToDP() {
 	fqdn_key := fmt.Sprintf("%s%s/", share.CLUSFqdnIpStore, e.HostID)
 	allKeys, _ := cluster.GetStoreKeys(fqdn_key)
@@ -1026,6 +1068,7 @@ func (e *Engine) PushFqdnInfoToDP() {
 }
 
 //dlp
+//##用于获取引擎对象的DlpWlRulesInfo字段的方法
 func (e *Engine) GetNetworkDlpWorkloadRulesInfo() map[string]*dp.DPWorkloadDlpRule {
 	e.Mutex.Lock()
 	defer e.Mutex.Unlock()
@@ -1033,6 +1076,7 @@ func (e *Engine) GetNetworkDlpWorkloadRulesInfo() map[string]*dp.DPWorkloadDlpRu
 	return e.DlpWlRulesInfo
 }
 
+//##用于获取引擎对象的DlpBldInfo字段的方法
 func (e *Engine) GetNetworkDlpBuildInfo() *DlpBuildInfo {
 	e.Mutex.Lock()
 	defer e.Mutex.Unlock()
@@ -1040,6 +1084,7 @@ func (e *Engine) GetNetworkDlpBuildInfo() *DlpBuildInfo {
 	return e.DlpBldInfo
 }
 
+//##用于将引擎对象的DlpWlRulesInfo字段中的所有数据泄露防护规则信息推送到DP的方法
 func (e *Engine) PushNetworkDlpToDP() {
 	log.Debug("config and build dlp")
 	e.Mutex.Lock()
