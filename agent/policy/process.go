@@ -17,61 +17,67 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type ProcProfileBrief struct {
-	name string
-	path string
+type ProcProfileBrief struct {  //存储进程概要信息
+	name string  //进程名
+	path string   //路径
 }
 
-type procGrpRef struct {
-	name    string
-	path    string
-	service string
-	id      string
-	ppid    int
+type procGrpRef struct {  //用于维护系统进程的引用或列表，并且可以描述相互关联的进程组、服务和父子进程之间的关系等。
+	name    string  //进程组名称
+	path    string  //进程路径
+	service string  //与进程相关的服务名称
+	id      string  //进程标识符
+	ppid    int   //进程的父进程标识符
 }
 
 // allowed parent scripts
-var permitProcessGrp map[int]*procGrpRef = make(map[int]*procGrpRef)
-var k8sGrpProbe utils.Set = utils.NewSet()
+var permitProcessGrp map[int]*procGrpRef = make(map[int]*procGrpRef)  //可以被用来存储进程组相关的信息，并支持按进程id查找
+var k8sGrpProbe utils.Set = utils.NewSet()  //用户存储k8s集权探测器的配置信息
 
+//更新监控引擎中的进程策略，并根据需要启动相关的探测器
+//name  指定要更新的进程名称
+//profile 包含新的进程策略信息
 func (e *Engine) UpdateProcessPolicy(name string, profile *share.CLUSProcessProfile) (bool, *share.CLUSProcessProfile) {
-	e.Mutex.Lock()
+	e.Mutex.Lock()  //互斥锁
 	defer e.Mutex.Unlock()
 
 	exist, ok := e.ProcessPolicy[name]
-	if !ok || !reflect.DeepEqual(exist, profile) {
-		e.ProcessPolicy[name] = profile
+	if !ok || !reflect.DeepEqual(exist, profile) {  //如果进程策略不存在或新的策略内容与旧的策略内容不一致
+		e.ProcessPolicy[name] = profile  //设置为新的进程策略
 		for _, p := range profile.Process {
-			if len(p.ProbeCmds) > 0 {
-				k8sGrpProbe.Add(name) // set the flag
+			if len(p.ProbeCmds) > 0 {  //检查是否配置了k8s检测器
+				k8sGrpProbe.Add(name) // set the flag  //
 				break
 			}
 		}
-		return true, exist
+		return true, exist  //返回ture和旧的策略内容
 	} else {
 		return false, exist
 	}
 }
 
+//监控引擎中的核心逻辑，用于根据进程名称和 ID 获取进程策略，并基于当前进程所处的组规则信息进行更新。
+//name 指定要获取的进程名称
+//id 指定当前进程的唯一标识符，通常是一个字符串
 func (e *Engine) ObtainProcessPolicy(name, id string) (*share.CLUSProcessProfile, bool) {
-	e.Mutex.Lock()
-	profile, _ := e.ProcessPolicy[name]
+	e.Mutex.Lock()  //互斥锁
+	profile, _ := e.ProcessPolicy[name]  //根据名称获取进程策略
 	e.Mutex.Unlock()
-	if profile != nil { // the process policy per group has been fetched
+	if profile != nil { // the process policy per group has been fetched  //如果进程规则不为空
 		if grp_profile, ok := e.getGroupRule(id); ok {
-			if grp_profile == nil { // neuvector pods only
+			if grp_profile == nil { // neuvector pods only //grp_profile为空 证明是neuvector pods
 				return profile, true
 			}
-			grp_profile.Baseline = profile.Baseline // following original profile
+			grp_profile.Baseline = profile.Baseline // following original profile //将组规则中的基线版本设置为原始进程策略中的基线版本，并根据需要更新组规则中的执行模式（Mode）
 			if grp_profile.Mode == "" {
 				grp_profile.Mode = profile.Mode // update
-			} else if grp_profile.Mode != profile.Mode {
+			} else if grp_profile.Mode != profile.Mode { //如果两者不相等，则记录日志并忽略新的模式设置，仍然使用旧的组规则中的模式。
 				// Detected: incomplete profile calculation, conflicts by timing
 				// The new profile has not been calculated (it could be 5 seconds later) yet.
 				// Just following the old group profile. it will be updated eventually.
 				log.WithFields(log.Fields{"name": name, "latest-mode": profile.Mode, "group-mode": grp_profile.Mode}).Debug("GRP: ")
 			}
-			return grp_profile, true
+			return grp_profile, true  //返回最终的进程策略和 true 作为结果
 		}
 	}
 
@@ -79,16 +85,18 @@ func (e *Engine) ObtainProcessPolicy(name, id string) (*share.CLUSProcessProfile
 	return nil, false
 }
 
+//用于判断给定的进程组名称是否需要在 Kubernetes 环境下执行探测器操作。
 func (e *Engine) IsK8sGroupWithProbe(name string) bool {
 	e.Mutex.Lock()
 	defer e.Mutex.Unlock()
-	return k8sGrpProbe.Contains(name)
+	return k8sGrpProbe.Contains(name)  //检查名为 name 的进程是否包含 Kubernetes 集群探测器。如果包含，则返回 true；否则返回 false。
 }
 
+//用于删除给定进程名称对应的进程策略，并将相关的 Kubernetes 进程组信息一并删除
 func (e *Engine) DeleteProcessPolicy(name string) {
 	e.Mutex.Lock()
-	delete(e.ProcessPolicy, name)
-	k8sGrpProbe.Remove(name)
+	delete(e.ProcessPolicy, name) //从名为 name 的进程策略映射表中删除对应的条目。
+	k8sGrpProbe.Remove(name)  //从 Kubernetes 进程组列表中删除名为 name 的进程组名称。
 	log.WithFields(log.Fields{"name": name}).Debug("PROC: ")
 	e.Mutex.Unlock()
 }
