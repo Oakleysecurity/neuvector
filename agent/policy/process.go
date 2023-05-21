@@ -101,35 +101,57 @@ func (e *Engine) DeleteProcessPolicy(name string) {
 	e.Mutex.Unlock()
 }
 
+//根据模式不同，返回相应的动作（默认）   ##5月21日19:38
+//mode  字符串类型，表示防护模式
 func defaultProcessAction(mode string) string {
 	switch mode {
-	case share.PolicyModeLearn:
-		return share.PolicyActionLearn
-	case share.PolicyModeEvaluate:
-		return share.PolicyActionViolate
-	case share.PolicyModeEnforce:
-		return share.PolicyActionDeny
+	case share.PolicyModeLearn:  //学习模式
+		return share.PolicyActionLearn  //返回学习动作
+	case share.PolicyModeEvaluate:  //监控模式
+		return share.PolicyActionViolate  //返回违反策略
+	case share.PolicyModeEnforce:  //保护模式
+		return share.PolicyActionDeny  //返回阻止策略
 	}
-	return share.PolicyActionViolate
+	return share.PolicyActionViolate   //默认返回违反策略
 }
 
+//用于比较两个结构体中特定字段的值，以确定他们是否匹配；
+//entry
+//proc
+/*
+type CLUSProcessProfileEntry struct {
+	Name            string    `json:"name"`  //进程名称
+	Path            string    `json:"path"`  //进程可执行文件的路径
+	User            string    `json:"user"`  //启动进程的用户
+	Uid             int32     `json:"uid"`  //启动进程的用户id
+	Hash            []byte    `json:"hash"`  //进程可执行文件的hash值
+	Action          string    `json:"action"`   //对这个进程执行的操作（阻止，允许）
+	CfgType         TCfgType  `json:"cfg_type"`  //配置类型（如黑、白名单）
+	CreatedAt       time.Time `json:"created_at"`  //创建时间
+	UpdatedAt       time.Time `json:"updated_at"`  //最后更新时间
+	Uuid            string    `json:"uuid"`   //用于唯一标识这个进程配置的uuid
+	DerivedGroup    string    `json:"dgroup"`  //派生组名称（例如可以给予进程路径自动生成的组）
+	AllowFileUpdate bool      `json:"allow_update"`  //是否允许更新进程可执行文件
+	ProbeCmds       []string  `json:"probe_cmds"`  //用于探测进程可执行文件的shell命令列表
+}
+*/
 func MatchProfileProcess(entry *share.CLUSProcessProfileEntry, proc *share.CLUSProcessProfileEntry) bool {
-	// matching the major criteria: executable path
+	// matching the major criteria: executable path  //匹配可执行文件的路径
 	// all accepted:
 	if entry.Name == "*" && (entry.Path == "*" || entry.Path == "/*") {
 		return true
 	}
 
-	// application matching
-	i := strings.LastIndex(proc.Path, "/")
-	if i < 0 {
+	// application matching  //匹配应用程序
+	i := strings.LastIndex(proc.Path, "/")  //分离出目录和文件名（返回最后一个/的位置）
+	if i < 0 {  //如果最后一个/的位置为0，表示路径有问题
 		log.WithFields(log.Fields{"exepath": proc.Path}).Debug("PROC: invalid path")
 		return false
 	}
 
 	//
-	dir := proc.Path[0:i]
-	bin := proc.Path[i+1:]
+	dir := proc.Path[0:i]  //将目录赋予dir
+	bin := proc.Path[i+1:]  //将可执行文件赋予bin
 	// log.WithFields(log.Fields{"name": entry.Name, "path": entry.Path, "exepath": proc.Path, "exebin": bin, "exedir": dir}).Debug("PROC: ")
 	if bin == entry.Name {
 		if entry.Path == "*" || entry.Path == "" || entry.Path == "/*" {
