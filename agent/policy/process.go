@@ -135,6 +135,8 @@ type CLUSProcessProfileEntry struct {
 	ProbeCmds       []string  `json:"probe_cmds"`  //用于探测进程可执行文件的shell命令列表
 }
 */
+
+/*用于进程策略的查找和匹配*/
 func MatchProfileProcess(entry *share.CLUSProcessProfileEntry, proc *share.CLUSProcessProfileEntry) bool {
 	// matching the major criteria: executable path  //匹配可执行文件的路径
 	// all accepted:
@@ -199,6 +201,7 @@ func MatchProfileProcess(entry *share.CLUSProcessProfileEntry, proc *share.CLUSP
 	return true
 }
 
+//实现了一个进程策略的查找和匹配逻辑，并返回匹配的结果
 func (e *Engine) ProcessPolicyLookup(name, id string, proc *share.CLUSProcessProfileEntry, pid int) (string, string, string, error) {
 	group := name // service group
 	profile, ok := e.ObtainProcessPolicy(name, id)
