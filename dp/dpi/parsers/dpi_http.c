@@ -10,7 +10,7 @@
 #define HTTP_BODY_FIRST_TIMEOUT      30
 #define HTTP_BODY_INTERVAL_TIMEOUT   3
 
-typedef struct http_wing_ {
+typedef struct http_wing_ {   //定义了http流量的元数据
     uint32_t seq;
     uint32_t content_len;
 #define HTTP_FLAGS_CONTENT_LEN  0x01
@@ -42,7 +42,7 @@ typedef struct http_wing_ {
     uint32_t hdr_start;
 } http_wing_t;
 
-typedef struct http_data_ {
+typedef struct http_data_ {   //包含了http请求/响应的解析信息
     http_wing_t client, server;
     uint16_t status:10,
 #define HTTP_METHOD_NONE   0
@@ -63,21 +63,23 @@ typedef struct http_data_ {
     uint8_t *body_buffer; // TODO: temp. way to buffer body in some cases.
 } http_data_t;
 
-typedef struct http_ctx_ {
+typedef struct http_ctx_ {  //包含了指向DPI数据包、http_data和http_wing的指针
     dpi_packet_t *p;
     http_data_t *data;
     http_wing_t *w;
 } http_ctx_t;
 
-typedef struct http_method_ {
+typedef struct http_method_ {   //包含了http方法的信息，如名称、长度、协议等
     char *name;
     uint8_t len;
     uint8_t proto;
     uint8_t method;
 } http_method_t;
 
+//包含了预定义的HTTP方法信息。每个数组元素表示一种HTTP方法，包括方法名称、名称长度、协议和方法类型等信息。
+//这个数组可以在HTTP协议解析时使用，用于判断HTTP请求或响应消息的方法类型。
 static http_method_t http_method[] = {
-    {"GET",     3, HTTP_PROTO_HTTP, HTTP_METHOD_GET},
+    {"GET",     3, HTTP_PROTO_HTTP, HTTP_METHOD_GET},  //方法名，长度，协议，方法类型
     {"PUT",     3, HTTP_PROTO_HTTP, HTTP_METHOD_PUT},
     {"POST",    4, HTTP_PROTO_HTTP, HTTP_METHOD_POST},
     {"DELETE",  6, HTTP_PROTO_HTTP, HTTP_METHOD_DELETE},
