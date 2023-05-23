@@ -8,10 +8,11 @@ import sys
 
 import click
 
-RECV_BUFFER_SIZE = 8192
-SERVER_SOCKET = "/tmp/dp_ctrl.sock"
-CLIENT_SOCKET = "/tmp/dp_ctrl_client.%d"
+RECV_BUFFER_SIZE = 8192  # 定义了接收缓冲区大小
+SERVER_SOCKET = "/tmp/dp_ctrl.sock"  # dp_ctrl服务端套接字
+CLIENT_SOCKET = "/tmp/dp_ctrl_client.%d"  # 客户端套接字路径
 
+# 用于维护与服务端之间的通信，并在对象销毁时自动关闭套接字，并删除客户端套接字文件。
 class CtxData(object):
     def __init__(self):
         self.local_path = CLIENT_SOCKET % os.getpid()
@@ -44,7 +45,7 @@ def session(data):
 
 @session.command()
 @click.pass_obj
-def list(data):
+def list(data):    #session组命令一：用于列出所有会话
     body = {"ctrl_list_session": dict()}
     data.sock.sendall(json.dumps(body))
 
@@ -54,9 +55,9 @@ def list(data):
         if not resp["more"]:
             break
 
-@session.command()
-@click.pass_obj
-def count(data):
+@session.command()   #这是一个Python装饰器，用于将函数注册为session组的子命令。
+@click.pass_obj  #用于传递上下文数据到每个子命令中，从而实现共享状态。
+def count(data):  #session组命令二：计算当前会话数
     body = {"ctrl_count_session": dict()}
     data.sock.sendall(json.dumps(body))
 
@@ -74,7 +75,7 @@ def debug(data):
 @click.argument('cat', type=click.Choice(['all', 'init', 'error', 'ctrl', 'packet',
                                           'session', 'timer', 'tcp', 'parser']))
 @click.pass_obj
-def enable(data, cat):
+def enable(data, cat):  #debug组命令一：启用调试信息
     """Enable debug category."""
     body = {"ctrl_set_debug": {"categories": ["+%s" % cat]}}
     data.sock.sendall(json.dumps(body))
@@ -83,14 +84,14 @@ def enable(data, cat):
 @click.argument('cat', type=click.Choice(['all', 'init', 'error', 'ctrl', 'packet',
                                           'session', 'timer', 'tcp', 'parser']))
 @click.pass_obj
-def disable(data, cat):
+def disable(data, cat):  #debug组命令二：禁用调试信息
     """Disable debug category."""
     body = {"ctrl_set_debug": {"categories": ["-%s" % cat]}}
     data.sock.sendall(json.dumps(body))
 
 @debug.command()
 @click.pass_obj
-def show(data):
+def show(data):   #debug组命令三：显示调试信息
     """Show debug setting."""
     body = {"ctrl_get_debug": dict()}
     data.sock.sendall(json.dumps(body))
