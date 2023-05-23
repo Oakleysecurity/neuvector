@@ -51,16 +51,16 @@ typedef struct http_data_ {   //包含了http请求/响应的解析信息
 #define HTTP_METHOD_PUT    3
 #define HTTP_METHOD_DELETE 4
 #define HTTP_METHOD_HEAD   5
-             method:4,
+             method:4,  //表示HTTP请求方法类型，占用4个二进制位。可以使用预定义的宏HTTP_METHOD_NONE、HTTP_METHOD_GET、HTTP_METHOD_POST等来赋值。
 #define HTTP_PROTO_NONE 0
 #define HTTP_PROTO_HTTP 1
-#define HTTP_PROTO_SIP  2
-#define HTTP_PROTO_RTSP 3
-             proto :2;
-    uint16_t body_buffer_len; // TODO: temp. way to buffer body in some cases.
-    uint32_t url_start_tick;
-    uint32_t last_body_tick;
-    uint8_t *body_buffer; // TODO: temp. way to buffer body in some cases.
+#define HTTP_PROTO_SIP  2 //SIP（Session Initiation Protocol，会话发起协议）是一种用于建立、修改和终止多媒体会话的网络协议。
+#define HTTP_PROTO_RTSP 3 //RTSP（Real-Time Streaming Protocol，实时流媒体协议）是一种用于控制互联网上多媒体服务器的应用层协议。
+             proto :2;  //表示HTTP协议类型，占用2个二进制位。
+    uint16_t body_buffer_len; // TODO: temp. way to buffer body in some cases. //表示临时缓存HTTP请求/响应消息主体的长度，单位为字节。
+    uint32_t url_start_tick;  //HTTP请求URL开始时间
+    uint32_t last_body_tick;  //HTTP请求URL最后一次接收到HTTP消息主体的时间戳。
+    uint8_t *body_buffer; // TODO: temp. way to buffer body in some cases.  //表示HTTP请求/响应消息主体的缓存指针。
 } http_data_t;
 
 typedef struct http_ctx_ {  //包含了指向DPI数据包、http_data和http_wing的指针
@@ -125,14 +125,16 @@ static bool is_couchbase_request(uint8_t * ptr, int len)
 }
 */
 
+//用于检测HTTP请求/响应消息是否超时。
+//dpi_session_t类型的指针s和void类型的指针parser_data，parser_data实际上指向http_data_t类型的结构体数据。
 int dpi_http_tick_timeout(dpi_session_t *s, void *parser_data)
 {
     http_data_t *data = parser_data;
 
     DEBUG_LOG_FUNC_ENTRY(DBG_SESSION | DBG_PARSER | DBG_TIMER, NULL);
 
-    if (data->url_start_tick > 0) {
-        if (th_snap.tick - data->url_start_tick >= HTTP_HEADER_COMPLETE_TIMEOUT) {
+    if (data->url_start_tick > 0) {  //根据data中的时间戳(http请求url开始时间)信息判断HTTP消息是否超时。如果url_start_tick大于0，则表示正在解析HTTP请求URL
+        if (th_snap.tick - data->url_start_tick >= HTTP_HEADER_COMPLETE_TIMEOUT) { //检查从开始解析到当前时间的持续时间是否超过HTTP_HEADER_COMPLETE_TIMEOUT（以秒为单位）。如果持续时间超过阈值，则记录日志并返回DPI_SESS_TICK_RESET，表示需要重置会话计时器。
             DEBUG_LOG(DBG_SESSION | DBG_PARSER | DBG_TIMER, NULL,
                       "Header duration=%us, threshold=%us\n",
                       th_snap.tick - data->url_start_tick, HTTP_HEADER_COMPLETE_TIMEOUT);
@@ -141,11 +143,11 @@ int dpi_http_tick_timeout(dpi_session_t *s, void *parser_data)
                       th_snap.tick - data->url_start_tick, HTTP_HEADER_COMPLETE_TIMEOUT);
             return DPI_SESS_TICK_RESET;
         }
-    } else if (data->last_body_tick > 0) {
+    } else if (data->last_body_tick > 0) { //如果last_body_tick大于0，则表示正在接收HTTP消息主体数据。
         switch (data->client.section) {
         case HTTP_SECTION_FIRST_BODY:
-            if (th_snap.tick - data->last_body_tick >= HTTP_BODY_FIRST_TIMEOUT) {
-                DEBUG_LOG(DBG_SESSION | DBG_PARSER | DBG_TIMER, NULL,
+            if (th_snap.tick - data->last_body_tick >= HTTP_BODY_FIRST_TIMEOUT) { //函数根据client.section字段的值（表示HTTP消息主体的段）来判断相应的超时阈值。如果是第一个消息主体段，检查从上一次数据到达到当前时间的间隔是否超过HTTP_BODY_FIRST_TIMEOUT；
+                DEBUG_LOG(DBG_SESSION | DBG_PARSER | DBG_TIMER, NULL,  //如果是后续的消息主体段，则按照HTTP_BODY_INTERVAL_TIMEOUT的阈值进行检查。如果超时，记录日志并返回DPI_SESS_TICK_RESET，表示需要重置会话计时器。
                           "First body packet interval=%us, threshold=%us\n",
                           th_snap.tick - data->last_body_tick, HTTP_BODY_INTERVAL_TIMEOUT);
                 dpi_threat_log_by_session(DPI_THRT_HTTP_SLOWLORIS, s,
@@ -248,6 +250,10 @@ static int http_parse_response(http_ctx_t *ctx, uint8_t *ptr, int len)
     return -1;
 }
 
+//用于解析HTTP响应消息
+//http_ctx_t类型的指针ctx  表示HTTP上下文
+//无符号字符型指针ptr  HTTP响应消息缓存指针
+//整型变量len  HTTP响应消息长度
 static int http_parse_request(http_ctx_t *ctx, uint8_t *ptr, int len)
 {
     int i;
@@ -324,6 +330,7 @@ static int http_parse_request(http_ctx_t *ctx, uint8_t *ptr, int len)
     ctx->data->proto = proto;
 
     // TODO: move to signature
+    //如果请求URL包含"/wp-content/"字符串，则将应用程序标识符设置为DPI_APP_WORDPRESS
     if (part[1].end - part[1].start > 12 && memcmp(part[1].start, "/wp-content/", 12) == 0) {
         dpi_ep_set_app(ctx->p, 0, DPI_APP_WORDPRESS);
     }
@@ -335,9 +342,11 @@ static int http_parse_request(http_ctx_t *ctx, uint8_t *ptr, int len)
         dpi_ep_set_app(ctx->p, 0, DPI_APP_COUCHBASE);
     }
     */
-
+//最后，函数返回当前行的结尾指针位置，表示成功解析一行HTTP请求/响应消息头。
     return eol - ptr;
 }
+
+//将标志位重置，表示请求体已完成；
 static void set_body_done(http_wing_t *w)
 {
     w->flags &= ~(HTTP_FLAGS_CONTENT_LEN | HTTP_FLAGS_CONN_CLOSE | HTTP_FLAGS_CHUNKED |
@@ -345,6 +354,7 @@ static void set_body_done(http_wing_t *w)
     w->content_len = 0;
 }
 
+//将连接关闭标志位设置为1,并重置其他标志位和内容长度；
 static void set_body_conn_close(http_wing_t *w)
 {
     w->flags |= HTTP_FLAGS_CONN_CLOSE;
@@ -352,6 +362,7 @@ static void set_body_conn_close(http_wing_t *w)
     w->content_len = 0;
 }
 
+//将分块传输标志位设置为1，并重置其他标志位和内容长度；
 static void set_body_chunked(http_wing_t *w)
 {
     w->flags |= HTTP_FLAGS_CHUNKED;
@@ -359,12 +370,14 @@ static void set_body_chunked(http_wing_t *w)
     w->content_len = 0;
 }
 
+//将指定内容长度标志位置为1，并清除其他标志位。
 static void set_body_content_length(http_wing_t *w)
 {
     w->flags |= HTTP_FLAGS_CONTENT_LEN;
     w->flags &= ~(HTTP_FLAGS_CONN_CLOSE | HTTP_FLAGS_CHUNKED);
 }
 
+//用于解析HTTP请求头中的Content-Length字段，提取其中的内容长度并存储在http_wing_t结构体的content_len字段中。
 static int http_header_content_length_token(void *param, uint8_t *ptr, int len, int token_idx)
 {
     http_ctx_t *ctx = param;
@@ -390,6 +403,10 @@ static int http_header_content_length_token(void *param, uint8_t *ptr, int len, 
     return CONSUME_TOKEN_SKIP_LINE;
 }
 
+//用于处理HTTP请求头中的Content-Length字段。
+//该函数会调用consume_tokens()函数解析Content-Length字段，并使用解析出来的长度更新http_wing_t结构体的content_len字段。
+//如果Content-Length字段是负数，就会触发DPI威胁并关闭连接；如果同时有Content-Length和分块传输标志位被设置，也会触发DPI威胁并关闭连接；
+//如果存在两个Content-Length字段且长度不同，也会触发DPI威胁并关闭连接。否则，将指定内容长度标志位置为1。同时，根据注释，还有部分逻辑被禁用了。
 static void http_header_content_length(http_ctx_t *ctx, uint8_t *ptr, int len)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_PARSER, ctx->p);
