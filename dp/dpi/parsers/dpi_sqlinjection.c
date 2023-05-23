@@ -16,19 +16,27 @@ typedef struct sql_injection_ {
     char * signature; 
 } sql_injection_t;
 
+
+//用于PCRE2正则表达式匹配
+//*p  指向dpi_packet_t结构体的指针
+//*recompiled  指向已编译的pcre2正则表达式
+//*signature  字符串类型的签名
+//substr_value  整型的字符串值
+// *query 一个指向uint8_t类型的查询语句
+// len  长度参数
 static bool injection_0 (dpi_packet_t *p, pcre2_code *recompiled, char *signature,
                                 int substr_value, uint8_t *query, int len) {
     bool match = false;
     pcre2_match_data * match_data;
     PCRE2_SIZE *ovector;
 
-    if(recompiled  == NULL) {
+    if(recompiled  == NULL) {  //正则是否为空
         DEBUG_LOG(DBG_PARSER, p, "ERROR: PCRE2 signature is not compiled '%s'\n", signature);
         return match;
     } 
-    match_data = pcre2_match_data_create_from_pattern(recompiled, NULL);
+    match_data = pcre2_match_data_create_from_pattern(recompiled, NULL);  //创建一个PCRE2_MATCH_DATA类型的变量match_data来存储匹配数据
 
-    if (match_data == NULL) {
+    if (match_data == NULL) {  //如果无法分配该结构体，则直接返回false。
         DEBUG_LOG(DBG_PARSER, p, "ERROR: PCRE2 match data block cannot be allocated\n");
         return match;
     }
@@ -69,6 +77,16 @@ static bool injection_0 (dpi_packet_t *p, pcre2_code *recompiled, char *signatur
 
 static sql_injection_t sql_injections[] ={   
 //SELECT * FROM users WHERE name='adam' or 'x' = 'x'
+/*
+(?i)表示后面的模式要进行大小写不敏感匹配。
+^SELECT.*表示以SELECT开头，后面跟着任意字符（包括换行符）的字符串。
+\'\\s+表示一个单引号后跟着一个或多个空格。
+(?:or|OR)表示或者，不进行捕获。
+\\s+表示一个或多个空格。
+((?:\'|\")?[0-9a-zA-Z_]+(?:\'|\")?)表示一个可选的单引号或双引号，后面跟着一个或多个字母、数字或下划线的字符串，最后又可能有一个单引号或双引号。
+\\s*表示零个或多个空格。
+\\1表示与前面捕获的第一个分组相同的字符串。
+*/
 {injection_0, NULL, 0, "(?i)^SELECT.*\'\\s+(?:or|OR)\\s+((?:\'|\")?[0-9a-zA-Z_]+(?:\'|\")?)\\s*=\\s*\\1"},
 };
 
