@@ -175,22 +175,34 @@ int dpi_http_tick_timeout(dpi_session_t *s, void *parser_data)
     return DPI_SESS_TICK_CONTINUE;
 }
 
+//用于检测慢速攻击（slowloris）中的请求主体攻击
+//*data  一个指向http数据结构的指针
+//*w 一个指向http报文头部的指针
+//主体攻击（Body Attack）是一种网络攻击方法，通常用于针对Web服务器。攻击者使用该方法发送大量的HTTP请求，使服务器在处理每个请求时都需要读取和接收数据，从而耗尽服务器资源并导致服务不可用。
 static inline bool to_detect_slowloris_body_attack(http_data_t *data, http_wing_t *w)
 {
     return data->method != HTTP_METHOD_GET && data->method != HTTP_METHOD_HEAD &&
            (w->flags & HTTP_FLAGS_CONTENT_LEN) && w->content_len > 0;
 }
 
+//用于判断给定字符是否为HTTP请求分隔符。
 static inline bool is_request_delimiter(char c)
 {
     return (c == ' ' || c == '\t');
 }
 
+//用于判断给定HTTP翼（wing）是否为HTTP请求
+//http翼也就是http报文头部（header）
 static inline bool is_request(http_wing_t *w)
 {
-    return FLAGS_TEST(w->flags, HTTP_FLAGS_REQUEST);
+    return FLAGS_TEST(w->flags, HTTP_FLAGS_REQUEST); //如果该HTTP翼的标志位中包含“HTTP_FLAGS_REQUEST”标记，则认为该HTTP翼为HTTP请求。
 }
 
+
+//这段代码是HTTP响应解析器的一部分，用于解析HTTP响应中的状态行，并返回状态行的长度。
+// *ctx  指向http上下文结构体的指针
+// *ptr  一个指向待解析数据块的指针
+// len  数据块长度
 static int http_parse_response(http_ctx_t *ctx, uint8_t *ptr, int len)
 {
     int status = 0;
@@ -198,19 +210,20 @@ static int http_parse_response(http_ctx_t *ctx, uint8_t *ptr, int len)
 
     DEBUG_LOG_FUNC_ENTRY(DBG_PARSER, ctx->p);
 
-    if (unlikely(len < 4)) return 0;
+    if (unlikely(len < 4)) return 0; //判断可读取的字节数是否小于4个字节，如果是，则返回0表示无法解析状态行。
     if (likely(strncmp(cptr, "HTTP", 4) == 0 || strncmp(cptr, "RTSP", 4) == 0 ||
-               strncmp(cptr, "SIP", 3) == 0)) {
+               strncmp(cptr, "SIP", 3) == 0)) { //如果前四个字节为"HTTP"、"RTSP"或"SIP"之一，则开始解析状态行。其中，HTTP是最常见的协议类型，而RTSP和SIP则分别代表媒体流传输协议和会话发起协议。
         uint8_t *l = ptr, *end = ptr + len;
         uint8_t *status_ptr = NULL;
         int version_end = 0;
 
         while (l < end) {
-            if (!isprint(*l)) {
+            if (!isprint(*l)) {  // *l 如果为不可打印字符，则说明http响应错误
                 return -1;
             }
 
-            if (isblank(*l)) {
+            if (isblank(*l)) {  // *l 所指字符是否为空白字符
+                //找到空格字符后，将已经扫描过的字符视为状态行的协议版本号部分，并将剩余的字符视为状态码和原因短语部分。
                 if (status_ptr != NULL) {
                     // Valid status line
                     int eols;
@@ -250,7 +263,7 @@ static int http_parse_response(http_ctx_t *ctx, uint8_t *ptr, int len)
     return -1;
 }
 
-//用于解析HTTP响应消息
+//用于解析HTTP请求中的请求行，并返回当前行的结尾指针位置。
 //http_ctx_t类型的指针ctx  表示HTTP上下文
 //无符号字符型指针ptr  HTTP响应消息缓存指针
 //整型变量len  HTTP响应消息长度
@@ -439,6 +452,7 @@ static void http_header_content_length(http_ctx_t *ctx, uint8_t *ptr, int len)
     }
 }
 
+//用于解析HTTP响应头中的Content-Type字段，并识别出消息体的MIME类型。
 static int http_header_content_type_token(void *param, uint8_t *ptr, int len, int token_idx)
 {
     if (strncasecmp((char *)ptr, "application/xml", 15) == 0) {
@@ -452,6 +466,7 @@ static int http_header_content_type_token(void *param, uint8_t *ptr, int len, in
     return 0;
 }
 
+//用于解析HTTP响应头中的Content-Type字段，并将结果存储在HTTP上下文结构体中
 static void http_header_content_type(http_ctx_t *ctx, uint8_t *ptr, int len)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_PARSER, ctx->p);
@@ -459,6 +474,7 @@ static void http_header_content_type(http_ctx_t *ctx, uint8_t *ptr, int len)
     consume_tokens(ptr, len, http_header_content_type_token, ctx);
 }
 
+//用于解析HTTP响应头中的Content-Encoding字段，并识别出消息体的编码方式。
 static int http_header_content_encoding_token(void *param, uint8_t *ptr, int len, int token_idx)
 {
     http_ctx_t *ctx = param;
@@ -478,6 +494,7 @@ static int http_header_content_encoding_token(void *param, uint8_t *ptr, int len
     return 0;
 }
 
+//用于解析HTTP响应头中的Content-Encoding字段
 static void http_header_content_encoding(http_ctx_t *ctx, uint8_t *ptr, int len)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_PARSER, ctx->p);
@@ -485,6 +502,7 @@ static void http_header_content_encoding(http_ctx_t *ctx, uint8_t *ptr, int len)
     consume_tokens(ptr, len, http_header_content_encoding_token, ctx);
 }
 
+//用于解析HTTP响应头中的Connection字段
 static int http_header_connection_token(void *param, uint8_t *ptr, int len, int token_idx)
 {
     if (strncasecmp((char *)ptr, "close", 5) == 0) {
@@ -505,6 +523,7 @@ static int http_header_connection_token(void *param, uint8_t *ptr, int len, int 
     return 0;
 }
 
+//用于解析HTTP响应头中的Connection字段
 static void http_header_connection(http_ctx_t *ctx, uint8_t *ptr, int len)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_PARSER, ctx->p);
@@ -512,6 +531,7 @@ static void http_header_connection(http_ctx_t *ctx, uint8_t *ptr, int len)
     consume_tokens(ptr, len, http_header_connection_token, ctx);
 }
 
+//用于解析HTTP响应头中的Transfer-Encoding字段
 static int http_header_xfr_encoding_token(void *param, uint8_t *ptr, int len, int token_idx)
 {
     http_ctx_t *ctx = param;
@@ -526,6 +546,7 @@ static int http_header_xfr_encoding_token(void *param, uint8_t *ptr, int len, in
     return 0;
 }
 
+//用于解析HTTP响应头中的Transfer-Encoding字段，并根据该字段的值设置HTTP翅膀结构体中的标志位，以便后续处理。
 static void http_header_xfr_encoding(http_ctx_t *ctx, uint8_t *ptr, int len)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_PARSER, ctx->p);
@@ -547,6 +568,7 @@ static void http_header_xfr_encoding(http_ctx_t *ctx, uint8_t *ptr, int len)
     */
 }
 
+//用于解析HTTP请求头中的X-Forwarded-Port字段，并将解析结果保存到会话结构体dpi_session_t中。
 static int http_header_xforwarded_port_token(void *param, uint8_t *ptr, int len, int token_idx)
 {
     http_ctx_t *ctx = param;
@@ -569,6 +591,8 @@ static int http_header_xforwarded_port_token(void *param, uint8_t *ptr, int len,
     return CONSUME_TOKEN_SKIP_LINE;
 }
 
+//用于解析HTTP请求头中的X-Forwarded-Port字段
+//X-Forwarded-Port字段表示客户端与代理服务器之间传输HTTP请求时使用的端口号
 static void http_header_xforwarded_port(http_ctx_t *ctx, uint8_t *ptr, int len)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_PARSER, ctx->p);
@@ -576,6 +600,8 @@ static void http_header_xforwarded_port(http_ctx_t *ctx, uint8_t *ptr, int len)
     consume_tokens(ptr, len, http_header_xforwarded_port_token, ctx);
 }
 
+//用于解析HTTP请求头中的X-Forwarded-Proto字段
+//X-Forwarded-Proto字段表示客户端与代理服务器之间传输HTTP请求时使用的协议（例如，HTTP或HTTPS）
 static int http_header_xforwarded_proto_token(void *param, uint8_t *ptr, int len, int token_idx)
 {
     http_ctx_t *ctx = param;
@@ -593,6 +619,7 @@ static int http_header_xforwarded_proto_token(void *param, uint8_t *ptr, int len
     return CONSUME_TOKEN_SKIP_LINE;
 }
 
+//用于解析HTTP请求头中的X-Forwarded-Proto字段
 static void http_header_xforwarded_proto(http_ctx_t *ctx, uint8_t *ptr, int len)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_PARSER, ctx->p);
@@ -600,6 +627,7 @@ static void http_header_xforwarded_proto(http_ctx_t *ctx, uint8_t *ptr, int len)
     consume_tokens(ptr, len, http_header_xforwarded_proto_token, ctx);
 }
 
+//用于解析HTTP请求头中的X-Forwarded-For字段
 static int http_header_xforwarded_for_token(void *param, uint8_t *ptr, int len, int token_idx)
 {
     http_ctx_t *ctx = param;
@@ -636,6 +664,7 @@ static int http_header_xforwarded_for_token(void *param, uint8_t *ptr, int len, 
     return CONSUME_TOKEN_SKIP_LINE;
 }
 
+//用于从HTTP请求头中获取X-Forwarded-For字段的值，并将其传入到回调函数http_header_xforwarded_for_token()进行解析。
 static void http_header_xforwarded_for(http_ctx_t *ctx, uint8_t *ptr, int len)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_PARSER, ctx->p);
@@ -643,6 +672,8 @@ static void http_header_xforwarded_for(http_ctx_t *ctx, uint8_t *ptr, int len)
     consume_tokens(ptr, len, http_header_xforwarded_for_token, ctx);
 }
 
+//用于识别HTTP请求头中的Server字段，并根据字段内容设置相应的应用程序类型。
+//具体来说，该函数通过对指定长度内的字符串进行比较，判断当前请求使用的服务器类型是Apache、Nginx、Jetty、Couchbase还是CouchDB，并将对应的应用程序类型写入dpi_packet_t结构体对象中，同时将版本信息写入该对象的另一个成员变量。
 static int http_header_server_token(void *param, uint8_t *ptr, int len, int token_idx)
 {
     http_ctx_t *ctx = param;
@@ -667,6 +698,7 @@ static int http_header_server_token(void *param, uint8_t *ptr, int len, int toke
     return CONSUME_TOKEN_SKIP_LINE;
 }
 
+//通过调用consume_tokens()函数，将传入的HTTP请求头数据进行解析，并调用回调函数http_header_server_token()处理解析后的结果
 static void http_header_server(http_ctx_t *ctx, uint8_t *ptr, int len)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_PARSER, ctx->p);
@@ -674,6 +706,8 @@ static void http_header_server(http_ctx_t *ctx, uint8_t *ptr, int len)
     consume_tokens(ptr, len, http_header_server_token, ctx);
 }
 
+//通过利用循环不断读取HTTP请求头信息，对请求头内部的各个字段进行解析，并调用相应的处理函数进行处理。
+//该函数可以解析Content-Length、Content-Type、Content-Encoding、Connection、Transfer-Encoding、X-Etcd-Cluster-Id、X-Forwarded-Proto、X-Forwarded-Port、X-Forwarded-For和Server等HTTP请求头字段，并根据字段内容调用相应的处理函数进行处理。
 static int http_parse_header(http_ctx_t *ctx, uint8_t *ptr, int len, bool *done)
 {
     dpi_packet_t *p = ctx->p;
