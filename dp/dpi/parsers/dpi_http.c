@@ -773,6 +773,11 @@ static int http_parse_header(http_ctx_t *ctx, uint8_t *ptr, int len, bool *done)
     return consume;
 }
 
+
+//通过循环读取HTTP请求体内部数据，对请求体进行解析，并根据请求体内部的内容切分成不同的chunk块。
+//具体来说，该函数可以解析chunked编码的HTTP请求体，并将其拆分成多个不定长度的chunk块进行处理。
+//这里的chunk是HTTP协议中传输编码（Transfer-Encoding）中使用的一种方式，即Chunked Transfer Encoding。该编码方式在传输数据时将数据分为多个块（chunk），每个块由长度和内容两部分组成，长度字段用十六进制数表示，紧接着是一个CRLF，然后是实际的数据内容，最后再次以CRLF结尾。多个chunk可以依次传输，每个chunk的长度都可以不同，在最后一个空chunk中使用长度字段0来标识整个请求体传输结束。
+    //在 HTTP/1.1 协议中，如果请求头中没有指定Content-Length，则可以使用Chunked Transfer Encoding方式进行数据传输。在HTTP请求头中通过"Transfer-Encoding: chunked"来启用该传输编码方式。
 static int http_body_chunk(http_ctx_t *ctx, uint8_t *ptr, int len, bool *done)
 {
     dpi_packet_t *p = ctx->p;
@@ -862,6 +867,8 @@ static int http_body_chunk(http_ctx_t *ctx, uint8_t *ptr, int len, bool *done)
 static pcre2_code *apache_struts_re;
 
 // TODO: temp. way to buffer body in some cases.
+//主要用于对HTTP消息体内容进行缓存，并对特定的威胁进行检测。
+//具体来说，如果HTTP请求体为XML格式且未经过编码，则将其缓存在内存中，然后使用PCRE2正则表达式引擎匹配该请求体是否包含Apache Struts远程代码执行漏洞（CVE-2017-9805）相关的字符串，以便提前检测到该威胁类型。
 static void buffer_body(http_ctx_t *ctx, uint8_t *ptr, int len) {
     http_wing_t *w = ctx->w;
 
@@ -892,6 +899,8 @@ static void buffer_body(http_ctx_t *ctx, uint8_t *ptr, int len) {
     }
 }
 
+//通过判断HTTP请求头部分是否包含Content-Length或Transfer-Encoding字段，来确定HTTP请求体的长度以及数据传输方式。
+//如果Content-Length字段存在，则通过该字段的值计算出整个请求体的长度，然后读取对应长度的数据进行处理；如果Transfer-Encoding字段为chunked，则使用chunked编码方式解析请求体内容。
 static int http_parse_body(http_ctx_t *ctx, uint8_t *ptr, int len, bool *done)
 {
     dpi_packet_t *p = ctx->p;
@@ -920,10 +929,11 @@ static int http_parse_body(http_ctx_t *ctx, uint8_t *ptr, int len, bool *done)
     }
 }
 
-
+//主要用于检测当前流量是否满足Slowloris攻击的特征。
+//Slowloris攻击是一种针对Web服务器的网络攻击方式，它利用HTTP/1.x协议中的一个特性——在不关闭连接的情况下可以发送多个请求，从而让服务器进入半连接状态，使得其他合法客户端无法建立连接。该攻击方式的特点是使用少量的连接和持久的HTTP头部信息来耗尽服务器资源（如CPU、内存等），从而导致服务器无法正常响应请求。
 static inline bool is_slowloris_on_for_wing(dpi_session_t *s, http_wing_t *w)
 {
-    return is_request(w) && dpi_session_check_tick(s, DPI_SESS_TICK_FLAG_SLOWLORIS);
+    return is_request(w) && dpi_session_check_tick(s, DPI_SESS_TICK_FLAG_SLOWLORIS); //如果当前处理的是HTTP请求，且会话已经开启了Slowloris检测机制，则返回true；否则返回false。
 }
 
 static inline void overwrite_base_app(dpi_packet_t *p, uint16_t app)
@@ -936,6 +946,9 @@ static inline void overwrite_base_app(dpi_packet_t *p, uint16_t app)
     }
 }
 
+//用于解析HTTP协议的函数
+//该函数接收一个DPI（Deep Packet Inspection）数据包作为参数，并根据其中的HTTP协议内容进行解析。
+//具体来说，它会按照HTTP协议的各个部分（请求行、请求头部、请求正文、响应头部、响应正文等）逐步解析数据包中的内容，并将解析结果存储在相关的结构体中。
 static void http_parser(dpi_packet_t *p)
 {
     http_ctx_t ctx;
@@ -1167,17 +1180,21 @@ static void http_parser(dpi_packet_t *p)
     }
 }
 
+//用于创建新的HTTP会话
 static void http_new_session(dpi_packet_t *p)
 {
-    dpi_hire_parser(p);
+    dpi_hire_parser(p);  //将数据包中的HTTP协议内容交给解析器进行处理，从而开始对HTTP协议的解析过程。
 }
 
+//用于释放HTTP协议解析过程中动态分配的内存
 static void http_delete_data(void *data)
 {
     free(((http_data_t *)data)->body_buffer);
     free(data);
 }
 
+//这是一个定义了HTTP协议解析器的数据结构对象
+//该对象使用了C语言中结构体字面量（Struct Literal）的语法形式进行初始化。
 static dpi_parser_t dpi_parser_http = {
     new_session: http_new_session,
     delete_data: http_delete_data,
@@ -1187,12 +1204,13 @@ static dpi_parser_t dpi_parser_http = {
     type:        DPI_PARSER_HTTP,
 };
 
+//用于获取HTTP协议解析器
 dpi_parser_t *dpi_http_tcp_parser(void)
 {
     int pcre_errno;
     PCRE2_SIZE pcre_erroroffset;
 
-    if (apache_struts_re == NULL) {
+    if (apache_struts_re == NULL) { //首先会检查apache_struts_re是否为NULL，如果为NULL则会调用pcre2_compile()函数对APACHE_STRUTS_PCRE进行编译（这里使用了正则表达式），并将结果存储在apache_struts_re中。
         apache_struts_re = pcre2_compile((PCRE2_SPTR)APACHE_STRUTS_PCRE,
                                          PCRE2_ZERO_TERMINATED,
                                          0,
@@ -1208,4 +1226,5 @@ dpi_parser_t *dpi_http_tcp_parser(void)
     }
 
     return &dpi_parser_http;
+    //返回指向全局变量dpi_parser_http的指针，该变量已经在前面定义过，并初始化为一个HTTP协议解析器对象。由于该解析器类型为DPI_PARSER_HTTP，因此可以通过调用这个函数来获得一个可用于解析HTTP协议的解析器对象。
 }
