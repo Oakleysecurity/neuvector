@@ -6,6 +6,8 @@
 extern dpi_sig_search_api_t *dpi_dlp_hs_search_register (void);
 extern bool cmp_mac_prefix(void *m1, void *prefix);
 
+//构建数据包深度包检测（DLP）的搜索树
+//搜索树是一种用于快速查找和匹配数据包中特定内容的数据结构。在这个函数中，需要向搜索树中添加一个或多个数据包检测规则，以便在网络数据包中查找指定的敏感信息。
 static void dpi_build_dlp_search_tree (dpi_sig_search_t *search, dpi_sig_t *sig)
 {
     //DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -25,8 +27,12 @@ static void dpi_build_dlp_search_tree (dpi_sig_search_t *search, dpi_sig_t *sig)
     search->count ++;
 }
 
-static void
-dpi_build_dlp_service_tree (dpi_sig_service_tree_t *service, dpi_sig_t *sig)
+//构建服务类型的搜索树
+/*
+service：指向 "dpi_sig_service_tree_t" 结构体的指针，表示服务类型的搜索对象
+sig：指向 "dpi_sig_t" 结构体的指针，表示一个数据包检测规则
+*/
+static void dpi_build_dlp_service_tree (dpi_sig_service_tree_t *service, dpi_sig_t *sig)
 {
     //DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
 
@@ -35,8 +41,13 @@ dpi_build_dlp_service_tree (dpi_sig_service_tree_t *service, dpi_sig_t *sig)
     dpi_build_dlp_search_tree(&service->client_server, sig);
 }
 
-static void
-dpi_build_dlp_protocol_tree (dpi_sig_protocol_tree_t *proto, dpi_sig_t *sig)
+
+//构建协议类型的搜索树
+/*
+proto：指向 "dpi_sig_protocol_tree_t" 结构体的指针，表示协议类型的搜索对象
+sig：指向 "dpi_sig_t" 结构体的指针，表示一个数据包检测规则
+*/
+static void dpi_build_dlp_protocol_tree (dpi_sig_protocol_tree_t *proto, dpi_sig_t *sig)
 {
     //DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
 
@@ -45,6 +56,12 @@ dpi_build_dlp_protocol_tree (dpi_sig_protocol_tree_t *proto, dpi_sig_t *sig)
     dpi_build_dlp_service_tree(&proto->service_unknown, sig);
 }
 
+
+//构建深度包检测的检测树
+/*
+tree：指向 "dpi_sig_detect_tree_t" 结构体的指针，表示深度包检测的检测对象
+sig：指向 "dpi_sig_t" 结构体的指针，表示一个数据包检测规则
+*/
 static void dpi_build_dlp_detect_tree (dpi_sig_detect_tree_t *tree, dpi_sig_t *sig)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -53,6 +70,8 @@ static void dpi_build_dlp_detect_tree (dpi_sig_detect_tree_t *tree, dpi_sig_t *s
     dpi_build_dlp_protocol_tree(&tree->protocol_unknown, sig);
 }
 
+//编译搜索树
+//search：指向 "dpi_sig_search_t" 结构体的指针，表示搜索对象
 static void dpi_compile_search_tree (dpi_sig_search_t *search)
 {
     //DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -66,6 +85,9 @@ static void dpi_compile_search_tree (dpi_sig_search_t *search)
     }
 }
 
+
+//编译服务类型的搜索树
+//service：指向 "dpi_sig_service_tree_t" 结构体的指针，表示服务类型的搜索对象
 static void dpi_compile_service_tree (dpi_sig_service_tree_t *service)
 {
     //DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -77,6 +99,9 @@ static void dpi_compile_service_tree (dpi_sig_service_tree_t *service)
     dpi_compile_search_tree(&service->client_server);
 }
 
+
+//编译协议类型的搜索树
+//proto：指向 "dpi_sig_protocol_tree_t" 结构体的指针，表示协议类型的搜索对象
 static void dpi_compile_protocol_tree (dpi_sig_protocol_tree_t *proto)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -88,7 +113,9 @@ static void dpi_compile_protocol_tree (dpi_sig_protocol_tree_t *proto)
     dpi_compile_service_tree(&proto->service_unknown);
 }
 
-
+//构建多模式匹配搜索树
+//detector：指向 "dpi_detector_t" 结构体的指针，表示深度包检测器对象
+//多模式匹配是一种在文本中同时搜索多个字符串的技术。它被广泛应用于网络安全领域，例如深度包检测（DLP）、入侵检测（IDS）和防病毒等。在多模式匹配中，可以使用不同的字符串算法来实现，如KMP、Boyer-Moore、Rabin-Karp、Aho-Corasick和正则表达式等。
 static void dpi_build_hs_mpse_tree (dpi_detector_t *detector)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -100,12 +127,14 @@ static void dpi_build_hs_mpse_tree (dpi_detector_t *detector)
     detect_tree = calloc(1, sizeof(dpi_sig_detect_tree_t));
     if (detect_tree != NULL) {
         memset(&detector->dlp_hs_summary, 0, sizeof(dpi_hs_summary_t));
+        
+        // // 遍历所有规则，并添加到检测树中
         cds_list_for_each_entry_safe(macro, macro_next, &detector->dlpSigList, node) {
             cds_list_for_each_entry_safe(sig, sig_next, &(macro->sigs), node) {
                 dpi_build_dlp_detect_tree(detect_tree, sig);
             }
         }
-
+ //编译搜索树
         dpi_compile_protocol_tree(&detect_tree->protocol_unknown);
 
         detector->tree = detect_tree;
@@ -121,6 +150,8 @@ static void dpi_build_hs_mpse_tree (dpi_detector_t *detector)
     }
 }
 
+//释放搜索树
+//search：指向 "dpi_sig_search_t" 结构体的指针，表示搜索对象
 static void dpi_dlp_release_search_tree (dpi_sig_search_t *search)
 {
     //DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -129,12 +160,15 @@ static void dpi_dlp_release_search_tree (dpi_sig_search_t *search)
         return;
     }
 
-    search->search_api->release(search->context);
+    search->search_api->release(search->context);  //调用搜索API的 "release" 函数来释放搜索树所占用的内存空间。
 
-    search->context = search->search_api = NULL;
+    search->context = search->search_api = NULL;  
     search->count = 0;
 }
 
+
+//释放服务类型的搜索树
+//service：指向 "dpi_sig_service_tree_t" 结构体的指针，表示服务类型的搜索对象
 static void dpi_dlp_release_service_tree (dpi_sig_service_tree_t *service)
 {
     //DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -148,6 +182,8 @@ static void dpi_dlp_release_service_tree (dpi_sig_service_tree_t *service)
     service->count = 0;
 }
 
+//释放协议类型的搜索树
+//proto：指向 "dpi_sig_protocol_tree_t" 结构体的指针，表示协议类型的搜索对象
 static void dpi_dlp_release_protocol_tree (dpi_sig_protocol_tree_t *proto)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -161,7 +197,8 @@ static void dpi_dlp_release_protocol_tree (dpi_sig_protocol_tree_t *proto)
     proto->count = 0;
 }
 
-
+//释放整个检测树的内存空间
+//tree：指向 "dpi_sig_detect_tree_t" 结构体的指针，表示检测树对象
 static void dpi_dlp_release_detector_tree (dpi_sig_detect_tree_t *tree)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -171,11 +208,13 @@ static void dpi_dlp_release_detector_tree (dpi_sig_detect_tree_t *tree)
     free(tree);
 }
 
+//打印规则列表
+//detector：指向 "dpi_detector_t" 结构体的指针，表示深度包检测器对象
 void dpi_print_siglist(dpi_detector_t *detector) 
 {
     dpi_sig_macro_sig_t *macro, *macro_next;
     dpi_sig_t *sig, *sig_next;
-    cds_list_for_each_entry_safe(macro, macro_next, &detector->dlpSigList, node) {
+    cds_list_for_each_entry_safe(macro, macro_next, &detector->dlpSigList, node) {  //函数遍历规则列表，并输出每个规则的详细信息。
         cds_list_for_each_entry_safe(sig, sig_next, &(macro->sigs), node) {
             DEBUG_CTRL("sig: name(%s),"
                         " text: (%s), "
@@ -193,6 +232,12 @@ void dpi_print_siglist(dpi_detector_t *detector)
     }
 }
 
+
+//将规则列表打印到指定文件中
+/*
+detector：指向 "dpi_detector_t" 结构体的指针，表示深度包检测器对象。
+logfp：一个指向 FILE 的指针，表示要写入的日志文件。
+*/
 void dpi_print_siglist_fp(dpi_detector_t *detector, FILE *logfp)
 {
     dpi_sig_macro_sig_t *macro, *macro_next;
@@ -215,6 +260,8 @@ void dpi_print_siglist_fp(dpi_detector_t *detector, FILE *logfp)
     }
 }
 
+//释放整个规则列表的内存空间。
+//detector：指向 "dpi_detector_t" 结构体的指针，表示深度包检测器对象。
 void dpi_dlp_release_dlprulelist (dpi_detector_t *detector)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -227,6 +274,8 @@ void dpi_dlp_release_dlprulelist (dpi_detector_t *detector)
     }
 }
 
+//函数功能：释放深度包检测（DLP）所需的一些全局上下文及其内存空间。
+//detector：指向 "dpi_detector_t" 结构体的指针，表示深度包检测器对象。
 void dpi_hs_free_global_context(dpi_detector_t *detector) 
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -241,6 +290,8 @@ void dpi_hs_free_global_context(dpi_detector_t *detector)
     detector->dlp_hs_pcre_scan_scratch = NULL;
 }
 
+//释放整个深度包检测器所占用的内存空间。
+//detector：指向 "dpi_detector_t" 结构体的指针，表示深度包检测器对象。
 void dpi_dlp_release_detector (dpi_detector_t *detector)
 {
     DEBUG_LOG_FUNC_ENTRY(DBG_INIT|DBG_DETECT, NULL);
@@ -389,6 +440,11 @@ dpi_sig_user_t* dpi_find_sig_user(struct cds_list_head *sig_user_list, dpi_sig_t
     return new_user;
 }
 
+//在给定数据包和规则对象的情况下进行深度包检测（DPI）或 Web 应用程序防火墙（WAF）的匹配过程，并返回匹配结果。
+/*
+p：指向 "dpi_packet_t" 结构体的指针，表示数据包对象。
+sig：指向 "dpi_sig_t" 结构体的指针，表示规则对象。
+*/
 dpi_sig_user_t *dpi_dlp_ep_match (dpi_packet_t *p, dpi_sig_t *sig){
     dpi_sig_user_t *user = NULL;
     if (!p || !sig) return user;
@@ -416,7 +472,8 @@ dpi_sig_user_t *dpi_dlp_ep_match (dpi_packet_t *p, dpi_sig_t *sig){
         }
         //DEBUG_DLP("match dlp rid:(%d)!\n", key.sigid);
         io_dlp_cfg_t *dlp_cfg = rcu_map_lookup(&ep->dlp_cfg_map, &key);
-        if (dlp_cfg != NULL) {
+        if (dlp_cfg != NULL) {  //如果找到了对应的 DLP 配置，则初始化该配置所维护的规则用户列表，并调用 "dpi_find_sig_user" 函数进行匹配操作。
+
             if (dlp_cfg->sig_user_list.prev == NULL && dlp_cfg->sig_user_list.next == NULL) {
                 CDS_INIT_LIST_HEAD(&dlp_cfg->sig_user_list);
             }
@@ -426,6 +483,13 @@ dpi_sig_user_t *dpi_dlp_ep_match (dpi_packet_t *p, dpi_sig_t *sig){
     return user;
 }
 
+
+//向数据包对象添加一个深度包检测（DPI）匹配候选项。
+/*
+p：指向 "dpi_packet_t" 结构体的指针，表示数据包对象。
+sig：指向 "dpi_sig_t" 结构体的指针，表示规则对象。
+nc：表示是否为无内容匹配标志
+*/
 void dpi_dlp_add_candidate (dpi_packet_t *p, dpi_sig_t *sig, bool nc)
 {
 
@@ -454,12 +518,19 @@ void dpi_dlp_add_candidate (dpi_packet_t *p, dpi_sig_t *sig, bool nc)
     p->has_dlp_candidates = 1;
 }
 
+//用于记录深度包检测（DPI）匹配过程中数据包对象的 URL、头部和正文三个方面的匹配状态。
+/*
+url：表示数据包对象是否已经匹配了 URL 部分。
+header：表示数据包对象是否已经匹配了头部部分。
+body：表示数据包对象是否已经匹配了正文部分。
+*/
 typedef struct dpi_dlp_context_status_ {
     uint8_t url    :1,
             header :1,
             body   : 1;
 } dpi_dlp_context_status_t;
 
+//数组存储了不同应用程序的深度包检测（DLP）上下文状态。
 static dpi_dlp_context_status_t base_app_dlp_context_status[] = {
 [DPI_APP_HTTP - DPI_APP_BASE_START]             {1, 1, 1,},
 [DPI_APP_SSL - DPI_APP_BASE_START]             {0, 0, 0,},
@@ -473,6 +544,22 @@ static dpi_dlp_context_status_t base_app_dlp_context_status[] = {
 [DPI_APP_SIP - DPI_APP_BASE_START]             {0, 0, 0,},
 };
 
+//该数组存储了不同协议或应用程序的深度包检测（DLP）上下文状态。
+/*
+静态数组名：app_dlp_context_status
+
+数据类型：dpi_dlp_context_status_t
+
+数组长度：DPI_APP_PROTO_MARK_MAX - DPI_APP_PROTO_MARK
+
+数组元素说明：每个元素表示一种协议或应用程序的 DLP 上下文状态，数组下标表示协议或应用程序类型。
+
+每个元素结构体成员变量：
+
+url：表示该协议或应用程序数据包的 URL 是否已经匹配。
+header：表示该协议或应用程序数据包的头部是否已经匹配。
+body：表示该协议或应用程序数据包的正文是否已经匹配。
+*/
 static dpi_dlp_context_status_t app_dlp_context_status[] = {
 [DPI_APP_MYSQL - DPI_APP_PROTO_MARK]                 {0, 0, 0,},
 [DPI_APP_REDIS - DPI_APP_PROTO_MARK]                 {0, 0, 0,},
@@ -504,6 +591,11 @@ static dpi_dlp_context_status_t app_dlp_context_status[] = {
 [DPI_APP_GRPC - DPI_APP_PROTO_MARK]                  {0, 0, 0,},
 };
 
+//用于检查给定的数据包对象是否支持深度包检测（DLP），并且指定的 DLP 上下文类别是否已经匹配。
+/*
+p：指向 dpi_packet_t 类型的指针，表示待检查的数据包对象。
+c：表示 DLP 上下文的类别，是一个 dpi_sig_context_class_t 枚举类型的值（可以是 HEADER、BODY 或 URI）。
+*/
 static bool dpi_support_dlp_context (dpi_packet_t *p, dpi_sig_context_class_t c)
 {
     uint32_t app = 0;
@@ -537,6 +629,8 @@ static bool dpi_support_dlp_context (dpi_packet_t *p, dpi_sig_context_class_t c)
     return false;
 }
 
+//用于整理数据包对象的搜索缓冲区，该函数根据指定的 DLP 上下文类别将数据包中的内容划分为不同的区域，并在这些区域之间进行切换。
+//参数：p，指向 dpi_packet_t 类型的指针，表示待整理的数据包对象。
 static void dpi_arrange_search_buffer (dpi_packet_t *p)
 {
     dpi_sig_context_type_t t;
@@ -687,6 +781,8 @@ void dpi_set_pkt_decision(dpi_packet_t *p, int action)
     }
 }
 
+//用于处理数据包对象中的 DLP 匹配结果，将匹配结果打印日志，并根据匹配结果更新数据包对象的 DPI 决策。
+//参数：p，指向 dpi_packet_t 类型的指针，表示待处理的数据包对象。
 static void dpi_sift_matchs (dpi_packet_t *p)
 {
     //DEBUG_LOG_FUNC_ENTRY(DBG_DETECT,NULL);
@@ -732,30 +828,38 @@ static void dpi_sift_matchs (dpi_packet_t *p)
 }
 
 //per packet decision whether to detect or not
+//用于检查数据包对象是否需要通过 WAF 进行检查。该函数根据数据包对象所属的会话、应用程序类型等信息，以及相关的网络策略和安全策略，来确定该数据包对象是否需要进行 WAF 检查。
+/*
+参数：p，指向 dpi_packet_t 类型的指针，表示待检查的数据包对象。
+*/
 bool dpi_waf_ep_policy_check (dpi_packet_t *p) {
-    if (!p || !p->ep || !(p->ep->dlp_detector)) {
+    if (!p || !p->ep || !(p->ep->dlp_detector)) { //首先判断参数 p 是否为空，以及 p 所属的 DPI 引擎中是否启用了 DLP 检测。如果不满足这些条件，则直接返回 false。
             return false;
     }
     // no session yet,  continue detect
-    if (!p->session) {
+    if (!p->session) {  //判断参数 p 是否已经有关联的会话对象 sess。如果没有，则认为该数据包对象还未与任何会话相关联，因此需要继续进行 WAF 检查，返回 true。
         return true;
     }
-
+//获取数据包对象所属的端点 ep、DLP 检测器 dlp_detector 和安全策略句柄 hdl，以及数据包对象是否属于代理网格 isproxymesh 等关键信息。
     io_ep_t *ep = p->ep;
     dpi_detector_t *dlp_detector = (dpi_detector_t *)ep->dlp_detector;
     dpi_policy_hdl_t *hdl = (dpi_policy_hdl_t *)ep->policy_hdl;
     bool isproxymesh = cmp_mac_prefix(p->ep_mac, PROXYMESH_MAC_PREFIX);
+    
+    
     io_dlp_ruleid_t key;
     dpi_session_t *sess = p->session;
     key.rid = sess->policy_desc.id;
     uint32_t app = 0;
 
     app = sess->app?sess->app:(sess->base_app?sess->base_app:DP_POLICY_APP_UNKNOWN);
+    ////根据当前会话的应用程序类型 app，判断是否是 SSL 或 SSH 协议。对于这两种协议，不进行 WAF 检查，直接返回 false。
     if (app == DPI_APP_SSL || app == DPI_APP_SSH) {
         //DEBUG_DLP("No waf inspection for SSL/SSH protocol, app(%u)!\n", app);
         return false;
     }
 
+    //如果数据包对象属于端点 ep 的内部网络，则判断是否需要进行 WAF 检查。
     if (!ep->waf_inside) {
         io_dlp_ruleid_t *waf_rid = rcu_map_lookup(&ep->waf_rid_map, &key);
         //only detect traffic that match network policy id for outside wl
@@ -769,12 +873,14 @@ bool dpi_waf_ep_policy_check (dpi_packet_t *p) {
         //for internal east-west traffic with no policy, no waf detect
         //always go through waf detection for proxymesh traffic
         //such as istio/linkerd
+        //对于没有关联网络策略的内部流量，如果安全策略句柄 hdl 存在且默认动作为拒绝，则需要进行 WAF 检查，返回 true。
         if (!isproxymesh && sess->policy_desc.id == 0 &&
             sess->policy_desc.action == DP_POLICY_ACTION_OPEN &&
             (sess->policy_desc.flags & POLICY_DESC_INTERNAL) ) {
             if (hdl && hdl->def_action == DP_POLICY_ACTION_DENY) {
                 return true;
             }
+            //对于有关联网络策略的内部流量，如果网络策略标志指明该流量来自隧道（tunnel）或主机（host），则需要进行 WAF 检查，返回 true。否则，不进行 WAF 检查，返回 false。
             if (dlp_detector->dlp_apply_dir & DP_POLICY_APPLY_EGRESS) {
                 if ((sess->policy_desc.flags & POLICY_DESC_TUNNEL) ||
                     (sess->policy_desc.flags & POLICY_DESC_HOSTIP)) {
@@ -794,6 +900,9 @@ bool dpi_waf_ep_policy_check (dpi_packet_t *p) {
 }
 
 //per packet decision whether to detect or not
+//用于检查数据包对象是否需要进行 DLP 检查。该函数根据数据包对象所属的会话、应用程序类型等信息，以及相关的网络策略和安全策略，来确定该数据包对象是否需要进行 DLP 检查。
+//p，指向 dpi_packet_t 类型的指针，表示待检查的数据包对象。
+//与waf的检测类似
 bool dpi_dlp_ep_policy_check (dpi_packet_t *p) {
     if (!p || !p->ep || !(p->ep->dlp_detector)) {
             return false;
@@ -861,6 +970,8 @@ bool dpi_dlp_ep_policy_check (dpi_packet_t *p) {
     }
 }
 
+// /用于在数据包经过 DPI 引擎时，检查数据包对象是否存在指定的 DLP 检测规则。该函数通过调用其他函数（如 dpi_dlp_search_detector_tree）对数据包进行深度搜索，并将搜索结果保存在数据包对象中，最终返回是否需要继续进行 DLP 检测。
+//p，指向 dpi_packet_t 类型的指针，表示待检查的数据包对象。
 bool dpi_process_detector(dpi_packet_t *p)
 {
     if (!p || !p->ep || !p->ep->dlp_detector) return true;
