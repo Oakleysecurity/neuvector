@@ -292,12 +292,16 @@ func (e *Engine) ProcessPolicyLookup(name, id string, proc *share.CLUSProcessPro
 }
 
 // matching the process name: suspicious process is defined by name only
+//用于判断给定的进程名称是否被允许
+//service 表示服务名称
+//id  表示进程id
+//name 表示进程名称
 func (e *Engine) IsAllowedSuspiciousApp(service, id, name string) bool {
-	profile, ok := e.ObtainProcessPolicy(service, id)
+	profile, ok := e.ObtainProcessPolicy(service, id)  //获取进程策略
 	if ok {
-		for _, entry := range profile.Process {
+		for _, entry := range profile.Process {  //遍历每一条策略
 			// all accepted:
-			if entry.Name == "*" && (entry.Path == "*" || entry.Path == "/*") {
+			if entry.Name == "*" && (entry.Path == "*" || entry.Path == "/*") {  //相当于保护机制，如果进程路径为*或/*则直接放过
 				return true
 			}
 
@@ -311,6 +315,8 @@ func (e *Engine) IsAllowedSuspiciousApp(service, id, name string) bool {
 
 // allowed by parent process name
 // The program logic is located at faccess_linux.go: isAllowedByParentApp()
+//用于判断给定的父进程名称是否允许派生出指定的子进程。
+//
 func (e *Engine) IsAllowedByParentApp(service, id, name, pname, ppath string, pgid int) bool {
 	var allowed bool
 
