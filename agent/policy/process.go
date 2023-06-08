@@ -316,7 +316,12 @@ func (e *Engine) IsAllowedSuspiciousApp(service, id, name string) bool {
 // allowed by parent process name
 // The program logic is located at faccess_linux.go: isAllowedByParentApp()
 //用于判断给定的父进程名称是否允许派生出指定的子进程。
-//
+//service  服务名称 
+//id  进程id
+//name  子进程名称
+//pname 父进程名称
+//ppath 父进程路径
+//pgid 父进程的进程组id
 func (e *Engine) IsAllowedByParentApp(service, id, name, pname, ppath string, pgid int) bool {
 	var allowed bool
 
@@ -366,6 +371,13 @@ func (e *Engine) IsAllowedByParentApp(service, id, name, pname, ppath string, pg
 }
 
 /////////////////////////////////////////////////////////////////////
+//用于根据指定的白名单和黑名单构建进程策略。
+/*
+serviceGroup：服务组名称。
+mode：进程模式。
+whtLst：一个 ProcProfileBrief 类型的切片，表示白名单列表。
+blackLst：一个 ProcProfileBrief 类型的切片，表示黑名单列表。
+*/
 func buildCustomizedProfile(serviceGroup, mode string, whtLst, blackLst []ProcProfileBrief) *share.CLUSProcessProfile {
 	profile := &share.CLUSProcessProfile{
 		Group:        serviceGroup,
@@ -375,6 +387,7 @@ func buildCustomizedProfile(serviceGroup, mode string, whtLst, blackLst []ProcPr
 	}
 
 	// white list
+	//函数会遍历白名单列表 whtLst，为每个白名单条目创建一个 CLUSProcessProfileEntry 类型的变量 wht。然后，将该条目的名称、路径和策略（允许）填入 wht 中，并使用 time.Now().UTC() 函数获取当前时间作为创建时间和更新时间。最后，将 wht 添加到 profile.Process 切片中，表示将其加入到进程策略中。
 	for _, ppw := range whtLst {
 		wht := &share.CLUSProcessProfileEntry{
 			Name:      ppw.name,
@@ -401,6 +414,7 @@ func buildCustomizedProfile(serviceGroup, mode string, whtLst, blackLst []ProcPr
 }
 
 /////////////////////////////////////////////////////////////////////
+//用于创建一个允许所有进程运行的进程策略。
 func buildAllowAllProfile(serviceGroup string) *share.CLUSProcessProfile {
 	var whtLst []ProcProfileBrief = []ProcProfileBrief{
 		{"*", "*"},
@@ -409,6 +423,7 @@ func buildAllowAllProfile(serviceGroup string) *share.CLUSProcessProfile {
 }
 
 /////////////////////////////////////////////////////////////////////
+//用于创建一个不允许任何进程运行的进程策略。
 func buildNotAllowedProfile(serviceGroup string) *share.CLUSProcessProfile {
 	var whtLst []ProcProfileBrief = []ProcProfileBrief{
 		{"abcdefg", "ab556677"}, // unexpected item
@@ -417,6 +432,14 @@ func buildNotAllowedProfile(serviceGroup string) *share.CLUSProcessProfile {
 }
 
 /////////////////////////////////////////////////////////////////////
+//用于构建管理进程的进程策略
+/*
+Python：允许 /usr/bin/* 中的所有文件运行。
+Manager cores：允许 /usr/lib/jvm/* 中的所有文件运行，包括 Java 虚拟机等。
+Busybox：允许 /bin/busybox 中的一些命令运行，例如 ps、netstat 等。
+Debug：允许 /bin/dash、/sbin/ip、/usr/bin/ps 等命令运行，用于调试目的。
+K8s or Openshift environment：允许 /pause、/usr/bin/pod 和一些与容器相关的命令运行。
+*/
 func buildManagerProfileList(serviceGroup string) *share.CLUSProcessProfile {
 	log.WithFields(log.Fields{"serviceGroup": serviceGroup}).Debug("PROC: manager")
 	var whtLst []ProcProfileBrief = []ProcProfileBrief{
@@ -469,6 +492,13 @@ func buildManagerProfileList(serviceGroup string) *share.CLUSProcessProfile {
 }
 
 /////////////////////////////////////////////////////////////////////
+//用于构建扫描进程的进程策略
+/*
+Scanner cores：允许 /usr/local/bin/monitor、/usr/local/bin/scanner 和 /usr/local/bin/scannerTask 运行。
+Busybox：允许 /bin/busybox 中的一些命令运行，例如 ps、netstat 等。
+Debug：允许 /bin/dash、/sbin/ip、/usr/bin/ps 等命令运行，用于调试目的。
+K8s or Openshift environment：允许 /pause、/usr/bin/pod 和一些与容器相关的命令运行。
+*/
 func buildScannerProfileList(serviceGroup string) *share.CLUSProcessProfile {
 	log.WithFields(log.Fields{"serviceGroup": serviceGroup}).Debug("PROC: scanner")
 	var whtLst []ProcProfileBrief = []ProcProfileBrief{
@@ -513,6 +543,14 @@ func buildScannerProfileList(serviceGroup string) *share.CLUSProcessProfile {
 }
 
 /////////////////////////////////////////////////////////////////////
+//用于构建控制进程的进程策略。
+/*
+/usr/local/bin：允许 /usr/local/bin/* 中的一些命令运行，例如 Consul、monitor、controller 等。
+Tools：允许 /sbin/sysctl、/usr/sbin/ethtool 等工具运行。
+Busybox：允许 /bin/busybox 中的一些命令运行，例如 ps、netstat 等。
+Debug：允许 /bin/dash、/sbin/ip、/usr/bin/ps 等命令运行，用于调试目的。
+K8s or Openshift environment：允许 /pause、/usr/bin/pod 和一些与容器相关的命令运行。
+*/
 func buildControllerProfileList(serviceGroup string) *share.CLUSProcessProfile {
 	log.WithFields(log.Fields{"serviceGroup": serviceGroup}).Debug("PROC: controller")
 	var whtLst []ProcProfileBrief = []ProcProfileBrief{
@@ -573,6 +611,14 @@ func buildControllerProfileList(serviceGroup string) *share.CLUSProcessProfile {
 }
 
 /////////////////////////////////////////////////////////////////////
+//用于构建 Enforcer 进程的进程策略
+/*
+/usr/local/bin：允许 /usr/local/bin/* 中的一些命令运行，例如 agent、Consul、monitor 等。
+Tools：允许 /usr/sbin/ethtool、/sbin/tc、/usr/bin/iconv 等工具运行。
+Busybox：允许 /bin/busybox 中的一些命令运行，例如 ps、netstat 等。
+Debug：允许 /bin/dash、/sbin/ip、/usr/bin/ps 等命令运行，用于调试目的。
+K8s or Openshift environment：允许 /pause、/usr/bin/pod 和一些与容器相关的命令运行。
+*/
 func buildEnforcerProfileList(serviceGroup string) *share.CLUSProcessProfile {
 	log.WithFields(log.Fields{"serviceGroup": serviceGroup}).Debug("PROC: enforcer")
 	var whtLst []ProcProfileBrief = []ProcProfileBrief{
@@ -640,6 +686,19 @@ func buildEnforcerProfileList(serviceGroup string) *share.CLUSProcessProfile {
 }
 
 /////////////////////////////////////////////////////////////////////
+//用于构建 All-in-one 进程的进程策略
+/*
+Python：允许 /usr/bin/* 中的 Python 2.7 或 Python 3.8 运行，例如 runtime-gdb.py。
+supervisord：允许 /usr/bin/* 中的 supervisord 进程运行，用于启动进程。
+support：允许 /usr/bin/* 中的 support 进程运行，用于提供支持服务。
+CLI：允许 /usr/bin/* 中的 CLI 工具运行。
+Manager cores：允许 /usr/lib/jvm/* 中的 JVM 进程运行。
+/usr/local/bin：允许 /usr/local/bin/* 中的一些命令运行，例如 agent、Consul、monitor 等。
+Tools：允许 /usr/sbin/ethtool、/sbin/tc、/usr/bin/iconv 等工具运行。
+Busybox：允许 /bin/busybox 中的一些命令运行，例如 ps、netstat 等。
+Debug：允许 /bin/dash、/sbin/ip、/usr/bin/ps 等命令运行，用于调试目的。
+K8s or Openshift environment：允许 /pause、/usr/bin/pod 和一些与容器相关的命令运行。
+*/
 func buildAllinOneProfileList(serviceGroup string) *share.CLUSProcessProfile {
 	log.WithFields(log.Fields{"serviceGroup": serviceGroup}).Debug("PROC: allInOne")
 	var whtLst []ProcProfileBrief = []ProcProfileBrief{
@@ -722,6 +781,15 @@ func buildAllinOneProfileList(serviceGroup string) *share.CLUSProcessProfile {
 }
 
 ///
+//用于向引擎中插入 Neuvector 进程策略
+/*
+buildEnforcerProfileList：用于构建 Enforcer 进程的进程策略。
+buildControllerProfileList：用于构建 Controller 进程的进程策略。
+buildManagerProfileList：用于构建 Manager 进程的进程策略。
+buildAllinOneProfileList：用于构建 All-in-one 进程的进程策略。
+buildScannerProfileList：用于构建 Scanner 进程的进程策略。
+buildAllowAllProfile：用于构建允许所有进程运行的进程策略。
+*/
 func (e *Engine) InsertNeuvectorProcessProfilePolicy(group, role string) {
 	log.WithFields(log.Fields{"group": group, "role": role}).Debug("PROC:")
 	var profile *share.CLUSProcessProfile
