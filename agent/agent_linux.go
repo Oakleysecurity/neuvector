@@ -11,9 +11,10 @@ import (
 	"github.com/neuvector/neuvector/share/utils"
 )
 
+//用于获取主机网络接口的IP地址。
 func getHostAddrs() map[string]sk.NetIface {
 	var ifaces map[string]sk.NetIface
-
+//执行一个指定命名空间下的网络操作，并在其中调用sk.GetGlobalAddrs()方法获取主机网络接口信息。最后将获得的网络接口信息作为结果返回。
 	global.SYS.CallNetNamespaceFunc(1, func(params interface{}) {
 		ifaces = sk.GetGlobalAddrs()
 	}, nil)
@@ -36,12 +37,14 @@ With Azure advanced networking plugin:
  5: azure0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP qlen 1000
 */
 
+//用于解析主机网络接口的IP地址，并返回相应的结果。
 func parseHostAddrs(ifaces map[string]sk.NetIface, platform, network string) (map[string][]share.CLUSIPAddr, utils.Set, bool, bool) {
 	devs := make(map[string][]share.CLUSIPAddr)
 	ips := utils.NewSet()
 	maxMTU := 0
 	ciliumCNI := false
 
+	//程序遍历输入的网络接口信息，判断每个接口的类型和MTU值，并根据条件对设备列表和IP地址集合进行相应的更新和添加。特别地，如果当前平台为Kubernetes，且网络接口名称以"cni"开头，则跳过该接口。另外，如果发现网络接口名称为"azure0"，则将其加入到设备列表中。
 	for name, iface := range ifaces {
 		log.WithFields(log.Fields{"link": name, "type": iface.Type, "mtu": iface.Mtu, "flags": iface.Flags}).Info("link")
 
