@@ -59,23 +59,23 @@ var exitingTaskFlag int32
 
 var walkerTask *workerlet.Tasker
 
-func shouldExit() bool {
+func shouldExit() bool {  //在程序运行期间检查是否应该推出程序
 	return (atomic.LoadInt32(&exitingFlag) != 0)
 }
 
-func assert(err error) {
+func assert(err error) {  //用于检查某个操作是否成功，并在操作失败时输出相应的错误信息并终止程序
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func isAgentContainer(id string) bool {
+func isAgentContainer(id string) bool {  //用于检查指定的容器 ID 是否与当前 Agent 容器或其父级 Agent 容器的 ID 匹配。
 	return id == Agent.ID || id == parentAgent.ID
 }
 
-func getHostIPs() {
+func getHostIPs() {  //用于获取主机的 IP 地址以及相关信息。
 	addrs := getHostAddrs()
-	Host.Ifaces, gInfo.hostIPs, gInfo.jumboFrameMTU, gInfo.ciliumCNI = parseHostAddrs(addrs, Host.Platform, Host.Network)
+	Host.Ifaces, gInfo.hostIPs, gInfo.jumboFrameMTU, gInfo.ciliumCNI = parseHostAddrs(addrs, Host.Platform, Host.Network)  //解析主机信息
 	if tun := global.ORCH.GetHostTunnelIP(addrs); tun != nil {
 		Host.TunnelIP = tun
 	}
@@ -86,7 +86,7 @@ func getHostIPs() {
 	mergeLocalSubnets(gInfo.internalSubnets)
 }
 
-func taskReexamHostIntf() {
+func taskReexamHostIntf() { //用于重新检查主机的网络接口信息并更新对应的全局变量
 	log.Debug()
 	oldIfaces := Host.Ifaces
 	oldTunnelIP := Host.TunnelIP
@@ -97,24 +97,26 @@ func taskReexamHostIntf() {
 	}
 }
 
+//用于获取本地节点的信息。
+//该函数的作用是获取本地节点的基本信息和网络环境信息，并将其存储到全局变量中以供 NeuVector Agent 使用。在容器环境下，该函数还会获取容器的设备信息和 cgroup 信息，以便更好地监控容器。
 func getLocalInfo(selfID string, pid2ID map[int]string) error {
-	host, err := global.RT.GetHost()
+	host, err := global.RT.GetHost()  //获取主机的基本信息，并将其存储到全局变量 Host 中。
 	if err != nil {
 		return err
 	}
 	Host = *host
-	Host.CgroupVersion = global.SYS.GetCgroupVersion()
+	Host.CgroupVersion = global.SYS.GetCgroupVersion()  //获取系统的 cgroup 版本，并将其保存到 Host.CgroupVersion 中。
 
-	getHostIPs()
+	getHostIPs()  //获取主机的网络接口信息和 IP 地址，并将其存储到全局变量中。
 
-	if networks, err := global.RT.ListNetworks(); err != nil {
+	if networks, err := global.RT.ListNetworks(); err != nil {  //获取容器网络信息，并将其存储到全局变量 gInfo.networks 中。
 		log.WithFields(log.Fields{"error": err}).Error("Error reading container networks")
 	} else {
 		gInfo.networks = networks
 	}
 
 	agentEnv.startsAt = time.Now().UTC()
-	if agentEnv.runInContainer {
+	if agentEnv.runInContainer {  //如果当前运行在容器中，则调用 global.RT.GetDevice() 函数获取容器的设备信息，并将其存储到全局变量 Agent.CLUSDevice 和 parentAgent.CLUSDevice 中。
 		dev, meta, err := global.RT.GetDevice(selfID)
 		if err != nil {
 			return err
@@ -122,17 +124,17 @@ func getLocalInfo(selfID string, pid2ID map[int]string) error {
 		Agent.CLUSDevice = *dev
 
 		_, parent := global.RT.GetParent(meta, pid2ID)
-		if parent != "" {
+		if parent != "" { 
 			dev, _, err := global.RT.GetDevice(parent)
 			if err != nil {
 				return err
 			}
 			parentAgent.CLUSDevice = *dev
-			if parentAgent.PidMode == "host" {
+			if parentAgent.PidMode == "host" {   //如果容器是以 PID 模式运行的，则将 Agent.PidMode 设置为 "host"。
 				Agent.PidMode = "host"
 			}
 		}
-	} else {
+	} else {  //如果当前未运行在容器中，则将 Agent.ID 设为主机 ID，Agent.Pid 设为当前进程 ID，Agent.NetworkMode 和 Agent.PidMode 均设置为 "host"。并将 Agent.SelfHostname、Agent.Ifaces、Agent.HostName、Agent.HostID 和 Agent.Ver 分别设置为主机名、网络接口信息、主机名、主机 ID 和 NeuVector 版本。
 		Agent.ID = Host.ID
 		Agent.Pid = os.Getpid()
 		Agent.NetworkMode = "host"
@@ -143,7 +145,7 @@ func getLocalInfo(selfID string, pid2ID map[int]string) error {
 	Agent.HostName = Host.Name
 	Agent.HostID = Host.ID
 	Agent.Ver = Version
-
+//调用 global.SYS.GetContainerCgroupPath() 函数获取容器的 cgroup 信息，并将其存储到全局变量中。
 	agentEnv.cgroupMemory, _ = global.SYS.GetContainerCgroupPath(0, "memory")
 	agentEnv.cgroupCPUAcct, _ = global.SYS.GetContainerCgroupPath(0, "cpuacct")
 	return nil
@@ -151,6 +153,8 @@ func getLocalInfo(selfID string, pid2ID map[int]string) error {
 
 // Sort existing containers, move containers share network ns to other containers to the front.
 // Only need to consider containers in the set, not those already exist.
+//排序的方式是将共享网络命名空间的容器放到数组的前面，未共享网络命名空间的容器放到数组的后面。
+//总的来说，该函数的作用是对一组容器按照网络模式进行排序，以便 NeuVector Agent 更好地监控和管理这些容器。
 func sortContainerByNetMode(ids utils.Set) []*container.ContainerMetaExtra {
 	sorted := make([]*container.ContainerMetaExtra, 0, ids.Cardinality())
 	for id := range ids.Iter() {
@@ -164,6 +168,12 @@ func sortContainerByNetMode(ids utils.Set) []*container.ContainerMetaExtra {
 
 // Sort existing containers, move containers share network ns to other containers to the front.
 // Only for Container Start from Probe channel
+//用于将容器按照网络模式排序。与 sortContainerByNetMode() 函数不同的是，该函数只对从 Probe 通道启动的容器进行排序。
+/*
+Probe 通道是 NeuVector Agent 用于从多个来源获取容器信息的一种机制。具体来说，当 NeuVector Agent 启动时，它会通过不同的方式（如 Docker API、Kubernetes API 等）获取当前主机上运行的容器信息并存储到本地缓存中。但由于容器可能在 Agent 启动之后才启动或被创建，所以仅依靠缓存中的信息可能无法完整地了解容器的状态和配置。
+为了解决这个问题，NeuVector Agent 引入了 Probe 通道机制。当某个容器启动时，Agent 会通知 Probe 服务，并告知 Probe 服务需要对该容器进行监控。然后 Probe 服务会向 Agent 提供容器的基本信息和事件信息等，以便 Agent 更好地监控和管理容器。
+例如，在 Kubernetes 集群中，当某个 Pod 中的容器启动时，NeuVector Agent 可以通过 Kubernetes API Server 接收到事件通知，并将其转发给 Probe 服务。然后 Probe 服务就可以根据事件通知来获取该容器的基本信息，并将其提供给 Agent 进行处理。这样就可以确保 Agent 可以实时地获取容器的最新状态，从而更好地保护容器安全。
+*/
 func sortProbeContainerByNetMode(starts utils.Set) []*container.ContainerMetaExtra {
 	sorted := make([]*container.ContainerMetaExtra, 0, starts.Cardinality())
 	for start := range starts.Iter() {
@@ -182,6 +192,7 @@ func sortProbeContainerByNetMode(starts utils.Set) []*container.ContainerMetaExt
 
 // Enforcer cannot run together with enforcer.
 // With SDN, enforcer can run together with controller; otherwise, port conflict will prevent them from running.
+//用于检查容器之间的互斥性关系，确保不会同时运行多个 Enforcer 容器。
 func checkAntiAffinity(containers []*container.ContainerMeta, skips ...string) error {
 	skipSet := utils.NewSet()
 	for _, skip := range skips {
@@ -202,6 +213,7 @@ func checkAntiAffinity(containers []*container.ContainerMeta, skips ...string) e
 	return nil
 }
 
+//用于重新运行 Kubernetes 安全扫描工具 Kube-bench。
 func cbRerunKube(cmd, cmdRemap string) {
 	if Host.CapKubeBench {
 		bench.RerunKube(cmd, cmdRemap, false)
