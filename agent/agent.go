@@ -396,37 +396,39 @@ func main() {
 	}
 
 	var selfID string
-	agentEnv.runWithController = *withCtlr
+	agentEnv.runWithController = *withCtlr  //表示是否需要运行控制器
 	agentEnv.runInContainer = global.SYS.IsRunningInContainer()
-	if agentEnv.runInContainer {
+	if agentEnv.runInContainer { //判断当前程序是否在容器中运行，如果是，则调用global.SYS.GetSelfContainerID()方法获取容器ID，并根据返回结果进行判断和处理。
 		selfID, agentEnv.containerInContainer, err = global.SYS.GetSelfContainerID()
 		if selfID == "" { // it is a POD ID in the k8s cgroup v2; otherwise, a real container ID
 			log.WithFields(log.Fields{"error": err}).Error("Unsupported system. Exit!")
 			os.Exit(-2)
 		}
-		agentEnv.containerShieldMode = (!*skip_nvProtect)
+		agentEnv.containerShieldMode = (!*skip_nvProtect)  //将命令行标志skip_nvProtect的值取反后赋给agentEnv.containerShieldMode变量，表示是否启用容器内部进程保护模式。
 		log.WithFields(log.Fields{"shield": agentEnv.containerShieldMode}).Info("PROC:")
-	} else {
+	} else {  //如果程序不在容器中运行，则输出信息日志表示未运行在容器中。
 		log.Info("Not running in container.")
 	}
 
-	if platform == share.PlatformKubernetes {
-		if selfID, err = global.IdentifyK8sContainerID(selfID); err != nil {
+	if platform == share.PlatformKubernetes {  //如果当前平台为Kubernetes，则调用global.IdentifyK8sContainerID()方法获取容器ID，并将结果赋给selfID变量。
+		if selfID, err = global.IdentifyK8sContainerID(selfID); err != nil { //该方法主要用于将Pod ID转换为容器ID，并对Kubernetes版本进行兼容性处理。
 			log.WithFields(log.Fields{"selfID": selfID, "error": err}).Error("lookup")
 		}
 	}
 
 	// Container port can be injected after container is up. Wait for at least one.
-	pid2ID := make(map[int]string)
-	for _, meta := range containers {
+	//等待容器中至少有一个端口映射打开，并获取本地设备信息和代理信息。
+	pid2ID := make(map[int]string)  //用于存储容器进程ID与ID的映射关系。
+	for _, meta := range containers {  //遍历容器列表containers，将已经启动的容器进程ID和容器ID加入到pid2ID中。
 		if meta.Pid != 0 {
 			pid2ID[meta.Pid] = meta.ID
 		}
 	}
 
-	for {
+	//通过等待端口映射打开和获取本地设备信息，程序可以获得容器内部网络和代理相关的信息，并进行监控和管理。
+	for {  //接着采用循环机制，不断调用getLocalInfo()函数获取本地设备和代理信息。
 		// Get local host and agent info
-		if err = getLocalInfo(selfID, pid2ID); err != nil {
+		if err = getLocalInfo(selfID, pid2ID); err != nil {  //该函数的作用是通过读取系统文件和网络信息等手段来获取当前节点的一些基本信息，包括IP地址、MAC地址、网关和DNS服务器等。
 			log.WithFields(log.Fields{"error": err}).Error("Failed to get local device information")
 			os.Exit(-2)
 		}
@@ -440,11 +442,14 @@ func main() {
 	}
 
 	// Check anti-affinity
+	//这段代码用于检查反亲和性（anti-affinity）是否符合要求
+	//通过反亲和性检查，程序可以确保容器之间的部署位置不会发生冲突或不合理的情况，从而提高系统的稳定性和可靠性。
 	var retry int
 	retryDuration := time.Duration(time.Second * 2)
 	for {
-		err = checkAntiAffinity(containers, Agent.ID, parentAgent.ID)
+		err = checkAntiAffinity(containers, Agent.ID, parentAgent.ID)  //对当前节点的容器列表、Agent ID和其父代理ID进行反亲和性校验。
 		if err != nil {
+			//
 			// Anti affinity check failure might be because the old enforcer is not stopped yet.
 			// This can happen when user switches from an enforcer to an allinone on the same host.
 			// Will wait and retry instead of quit to tolerate the timing issue.
@@ -470,25 +475,28 @@ func main() {
 	Host.Platform = platform
 	Host.Flavor = flavor
 	Host.Network = network
-	Host.CapDockerBench = (global.RT.String() == container.RuntimeDocker)
-	Host.CapKubeBench = global.ORCH.SupportKubeCISBench()
+	Host.CapDockerBench = (global.RT.String() == container.RuntimeDocker)  //如果当前运行时类型为Docker，则表示支持Docker基准测试，否则不支持；
+	Host.CapKubeBench = global.ORCH.SupportKubeCISBench()  //如果当前管理器支持Kubernetes CIS基准测试，则表示支持Kubernetes基准测试。
 
-	Agent.Domain = global.ORCH.GetDomain(Agent.Labels)
+	Agent.Domain = global.ORCH.GetDomain(Agent.Labels)  //获取Agent和其父代理的域名信息，并赋值给相应的Agent.Domain和parentAgent.Domain变量。
 	parentAgent.Domain = global.ORCH.GetDomain(parentAgent.Labels)
 
-	policyInit()
+	policyInit()  //对策略进行初始化
 
 	// Assign agent interface/IP scope
+	//用于为代理接口分配IP地址范围
 	if agentEnv.runInContainer {
-		meta := container.ContainerMeta{
+		meta := container.ContainerMeta{  //如果程序运行于容器中，则根据代理的ID、名称、网络模式和标签等信息，构造一个container.ContainerMeta结构体meta。
 			ID:      Agent.ID,
 			Name:    Agent.Name,
 			NetMode: Agent.NetworkMode,
 			Labels:  Agent.Labels,
 		}
-		global.ORCH.SetIPAddrScope(Agent.Ifaces, &meta, gInfo.networks)
+		global.ORCH.SetIPAddrScope(Agent.Ifaces, &meta, gInfo.networks)  //指定代理接口和IP地址范围
+		//将指定的网络接口和IP地址范围映射起来，并在需要时进行动态调整。该方法会遍历所有的网络接口，并获取其IPv4和IPv6地址以及子网掩码等信息，然后计算出对应的IP地址范围，并将其存储到内部数据结构中。同时，该方法还会根据传入的容器元数据和网络信息，自动分配并设置代理接口的IP地址范围。
 	}
 
+	//这段代码主要是设置全局变量Host的存储驱动类型、创建日志队列和消息传递器，并打开管道驱动并获取其端口号。
 	Host.StorageDriver = global.RT.GetStorageDriver()
 	log.WithFields(log.Fields{"hostIPs": gInfo.hostIPs}).Info("")
 	log.WithFields(log.Fields{"host": Host}).Info("")
@@ -500,26 +508,29 @@ func main() {
 	messenger = cluster.NewMessenger(Host.ID, Agent.ID)
 
 	//var driver string
-	if *pipeType == "ovs" {
-		driver = pipe.PIPE_OVS
+	if *pipeType == "ovs" {  //根据命令行标志pipeType的不同取值，设置相应的驱动类型driver。
+		driver = pipe.PIPE_OVS  //表示使用Open vSwitch作为管道驱动
 	} else if *pipeType == "no_tc" {
-		driver = pipe.PIPE_NOTC
+		driver = pipe.PIPE_NOTC  //表示不使用tc作为管道驱动，而是使用Cilium CNI或者其他非tc的方式
 		if gInfo.ciliumCNI {
 			driver = pipe.PIPE_CLM
 		}
-	} else {
+	} else {  //否则使用默认的tc作为管道驱动
 		driver = pipe.PIPE_TC
 		if gInfo.ciliumCNI {
 			driver = pipe.PIPE_CLM
 		}
 	}
 	log.WithFields(log.Fields{"pipeType": driver, "jumboframe": gInfo.jumboFrameMTU, "ciliumCNI": gInfo.ciliumCNI}).Info("")
+	//根据驱动类型、容器网络类型、代理进程ID和Jumbo Frame MTU等参数，调用pipe.Open()方法打开管道驱动，并获取其服务端口号和客户端口号。
 	if nvSvcPort, nvSvcBrPort, err = pipe.Open(driver, cnet_type, Agent.Pid, gInfo.jumboFrameMTU); err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to open pipe driver")
 		os.Exit(-2)
 	}
 
 	// Start cluster
+	//用于启动集群并设置相关参数。
+	//首先定义一个clusterCfg变量，并设置其ID、是否为服务器模式、是否为调试模式、代理接口和IP地址列表以及其他一些参数。
 	var clusterCfg cluster.ClusterConfig
 	clusterCfg.ID = Agent.ID
 	clusterCfg.Server = false
@@ -532,7 +543,7 @@ func main() {
 	clusterCfg.DataCenter = cluster.DefaultDataCenter
 	clusterCfg.EnableDebug = *debug
 
-	if err = clusterStart(&clusterCfg); err != nil {
+	if err = clusterStart(&clusterCfg); err != nil { //启动集群
 		log.WithFields(log.Fields{"error": err}).Error("Failed to start cluster. Exit!")
 		if err == errNotAdmitted || err == errCtrlNotReady {
 			// This indicates controllers are up but license is not loaded.
@@ -566,30 +577,58 @@ func main() {
 	// Datapath
 	dpStatusChan := make(chan bool, 2)
 	dp.Open(dpTaskCallback, dpStatusChan, errRestartChan)
+	//首先使用make()方法创建一个缓冲大小为2的布尔型通道dpStatusChan，并调用dp.Open()方法打开数据路径，并传入任务回调函数、状态通道和错误重启通道等参数。
 
 	// Benchmark
+	//创建基准测试对象bench，并调用其BenchLoop()方法在单独的协程中周期性地执行基准测试。
 	bench = newBench(Host.Platform, Host.Flavor)
 	go bench.BenchLoop()
 
-	if Host.CapDockerBench {
+	if Host.CapDockerBench {  //根据当前运行时类型是否为Docker，选择重新运行Docker基准测试或者清除之前的测试状态。
 		bench.RerunDocker(false)
-	} else {
+	} else {  
 		// If the older version write status into the cluster, clear it.
 		bench.ResetDockerStatus()
 	}
-	if !Host.CapKubeBench {
+	if !Host.CapKubeBench {  //如果当前环境不支持Kubernetes CIS基准测试，则同样清除之前的测试状态。
 		// If the older version write status into the cluster, clear it.
 		bench.ResetKubeStatus()
 	}
 
+	//最后根据运行时类型是否为Cri-O，设置被动容器检测标志bPassiveContainerDetect。
 	bPassiveContainerDetect := global.RT.String() == container.RuntimeCriO
 
 	// Probe
+	//主要是创建并配置探针对象，以及设置相应的参数和选项。具体来说，程序使用make()方法创建大小为256和8的通道probeTaskChan和fsmonTaskChan，并创建布尔型通道faEndChan和fsmonEndChan。
 	probeTaskChan := make(chan *probe.ProbeMessage, 256) // increase to avoid underflow
 	fsmonTaskChan := make(chan *fsmon.MonitorMessage, 8)
 	faEndChan := make(chan bool, 1)
 	fsmonEndChan := make(chan bool, 1)
-	probeConfig := probe.ProbeConfig{
+	/*
+ProfileEnable：是否启用系统性能分析。
+Pid：当前进程ID。
+PidMode：进程模式，即容器化或非容器化模式。
+DpTaskCallback：数据路径任务回调函数。
+NotifyTaskChan：通知通道，用于接收探针任务。
+NotifyFsTaskChan：文件系统监控任务通道，用于接收文件系统监控任务。
+PolicyLookupFunc：主机策略查找函数。
+ProcPolicyLookupFunc：进程策略查找函数。
+IsK8sGroupWithProbe：是否为Kubernetes组。
+ReportLearnProc：学习过程回调函数。
+ContainerInContainer：是否在容器中运行。
+GetContainerPid：获取容器PID的回调函数。
+GetAllContainerList：获取所有容器列表的回调函数。
+RerunKubeBench：重新运行Kubernetes CIS基准测试的回调函数。
+GetEstimateProcGroup：估计由该组拒绝的进程数的回调函数。
+GetServiceGroupName：获取服务组名称的回调函数。
+FAEndChan：结束信道。
+DeferContStartRpt：被动容器检测标志。
+EnableTrace：是否启用跟踪日志。
+KubePlatform：是否为Kubernetes平台。
+KubeFlavor：Kubernetes版本。
+WalkHelper：探测辅助函数。
+	*/
+	probeConfig := probe.ProbeConfig{  //根据代理环境变量和其他一些信息，构造一个probe.ProbeConfig结构体probeConfig，并将其传入probe.New()方法中，用于创建探针对象。
 		ProfileEnable:        agentEnv.systemProfiles,
 		Pid:                  Agent.Pid,
 		PidMode:              Agent.PidMode,
