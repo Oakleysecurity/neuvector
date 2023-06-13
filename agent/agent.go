@@ -214,23 +214,26 @@ func checkAntiAffinity(containers []*container.ContainerMeta, skips ...string) e
 }
 
 //用于重新运行 Kubernetes 安全扫描工具 Kube-bench。
+// cmd 参数指定要执行的命令，例如 "master" 或 "node" 等；
+// cmdRemap 参数指定命令重映射表，用于将一些命令重定向到其他的命令，以便满足特定的需求。
 func cbRerunKube(cmd, cmdRemap string) {
 	if Host.CapKubeBench {
 		bench.RerunKube(cmd, cmdRemap, false)
 	}
 }
 
+//该函数的作用是确保容器任务队列已经完全退出，并且容器端口已经恢复正常。
 func waitContainerTaskExit() {
 	// Wait for container task gorouting exiting and container ports' are restored.
 	// If clean-up doesn't star, it's possible that container task queue get stuck.
 	// In that case, call clean-up function directly and move forward. If the clean-up
 	// already started, keep waiting.
-	for {
+	for {  //无限循环
 		select {
-		case <-containerTaskExitChan:
+		case <-containerTaskExitChan:  //如果容器任务队列已退出，则直接返回。
 			return
-		case <-time.After(time.Second * 4):
-			if atomic.LoadInt32(&exitingTaskFlag) == 0 {
+		case <-time.After(time.Second * 4):  //否则，等待 4 秒钟。如果在等待期间发现容器任务队列已经完全退出，那么调用 containerTaskExit() 函数，并立即返回。
+			if atomic.LoadInt32(&exitingTaskFlag) == 0 {  //检查一个名为 exitingTaskFlag 的原子标志变量，以判断任务队列是否仍在运行中
 				containerTaskExit()
 				return
 			}
@@ -238,6 +241,8 @@ func waitContainerTaskExit() {
 	}
 }
 
+//用于将当前 Enforcer 进程中所有 goroutine 的栈信息输出到日志中。
+//该函数的作用是帮助开发人员在调试和排查问题时，快速定位和诊断 Enforcer 进程中可能存在的问题，并提供相应的解决方案。
 func dumpGoroutineStack() {
 	log.Info("Enforcer goroutine stack")
 	buf := make([]byte, goroutineStackSize)
@@ -267,6 +272,7 @@ func main() {
 	//    defer log_file.close()
 	// }
 
+	//这段代码使用了Go标准库中的flag包，定义了一系列命令行标志。
 	withCtlr := flag.Bool("c", false, "Coexist controller and ranger")
 	debug := flag.Bool("d", false, "Enable control path debug")
 	debug_level := flag.String("v", "", "debug level")
@@ -286,6 +292,7 @@ func main() {
 	disable_system_protection := flag.Bool("no_sys_protect", false, "disable system protections")
 	flag.Parse()
 
+	//该代码块用于根据命令行参数来调整日志和调试设置，例如根据debug标志判断是否需要启用调试模式，并根据debug_level标志添加其他调试信息等。
 	if *debug {
 		log.SetLevel(log.DebugLevel)
 		gInfo.agentConfig.Debug = []string{"ctrl"}
@@ -299,24 +306,30 @@ func main() {
 		gInfo.agentConfig.Debug = levels.ToStringSlice()
 	}
 
+	//首先将agentEnv.kvCongestCtrl属性默认值设为true，表示开启KV拥塞控制。然后，如果命令行标志disable_kv_congest_ctl被设置，则将日志输出一条信息："KV congestion control is disabled"，并将agentEnv.kvCongestCtrl属性的值设置为false，即关闭该功能。
+	//KV拥塞控制通常是指分布式存储系统中对Key-Value（KV）数据访问的流量进行控制和调整，目的是避免因过多的并发访问或频繁的读写操作导致系统性能下降或崩溃。
 	agentEnv.kvCongestCtrl = true
 	if *disable_kv_congest_ctl {
 		log.Info("KV congestion control is disabled")
 		agentEnv.kvCongestCtrl = false
 	}
 
+	//将agentEnv.scanSecrets属性的默认值设为true，表示开启容器中秘密信息的扫描。如果命令行标志disable_scan_secrets被设置，则将日志输出一条信息："Scanning secrets on containers is disabled"，并将agentEnv.scanSecrets属性的值设置为false，即关闭该功能。
 	agentEnv.scanSecrets = true
 	if *disable_scan_secrets {
 		log.Info("Scanning secrets on containers is disabled")
 		agentEnv.scanSecrets = false
 	}
 
+	//将agentEnv.autoBenchmark属性的默认值设为true，表示开启自动基准测试功能。如果命令行标志disable_auto_benchmark被设置，则将日志输出一条信息："Auto benchmark is disabled"，并将agentEnv.autoBenchmark属性的值设置为false，即关闭该功能。
 	agentEnv.autoBenchmark = true
 	if *disable_auto_benchmark {
 		log.Info("Auto benchmark is disabled")
 		agentEnv.autoBenchmark = false
 	}
 
+	//将agentEnv.systemProfiles属性默认值设为true，表示开启系统保护功能。然后，如果命令行标志disable_system_protection被设置，则将日志输出一条信息："System protection is disabled (process/file profiles)"，并将agentEnv.systemProfiles属性的值设置为false，即关闭该功能。
+	//系统保护通常指对操作系统、进程和文件进行安全保护和监控，以防止恶意攻击或非法访问。
 	agentEnv.systemProfiles = true
 	if *disable_system_protection {
 		log.Info("System protection is disabled (process/file profiles)")
@@ -335,6 +348,7 @@ func main() {
 		*/
 		joinAddr = *join
 	}
+	//判断adv标志是否被设置，如果有值则将其解析为广告地址(advertise address)，并将解析后的结果赋值给advAddr变量。由于一个节点可能有多个IP地址，因此程序会调用utils.ResolveIP函数获取具体的IP地址，并选择其中的第一个地址作为广告地址。如果解析失败或者没有可用的IP地址，则同样会输出错误日志并退出程序。
 	if *adv != "" {
 		ips, err := utils.ResolveIP(*adv)
 		if err != nil || len(ips) == 0 {
@@ -344,12 +358,14 @@ func main() {
 
 		advAddr = ips[0].String()
 	}
+	//判断bind标志是否被设置，如果有值则将其直接赋值给bindAddr变量，并输出信息日志。
 	if *bind != "" {
 		bindAddr = *bind
 		log.WithFields(log.Fields{"bind": bindAddr}).Info()
 	}
 
 	// Set global objects at the very first
+	//在程序启动时设置全局对象，并根据结果判断是否初始化成功。如果成功，则将返回的各个参数值分别赋给platform、flavor、network和containers变量；否则输出错误日志并退出程序，其中如果发现容器列表为空，则直接退出进程但不需要重新启动容器。
 	platform, flavor, network, containers, err := global.SetGlobalObjects(*rtSock, resource.Register)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to initialize")
@@ -362,14 +378,15 @@ func main() {
 	}
 
 	walkerTask = workerlet.NewWalkerTask(*show_monitor_trace, global.SYS)
+	//WalkerTask是一个用于遍历容器文件系统并收集指标数据的工作任务，可以在容器监控和诊断中使用。
 
 	log.WithFields(log.Fields{"endpoint": *rtSock, "runtime": global.RT.String()}).Info("Container socket connected")
-	if platform == share.PlatformKubernetes {
+	if platform == share.PlatformKubernetes {  //如果当前平台是Kubernetes，则获取其版本信息并注册资源，并根据注册结果判断是否为OpenShift平台，并设置相应的平台类型。
 		k8sVer, ocVer := global.ORCH.GetVersion(false, false)
 		if k8sVer != "" && ocVer == "" {
-			if err := global.ORCH.RegisterResource("image"); err == nil {
+			if err := global.ORCH.RegisterResource("image"); err == nil { //如果是OpenShift，则调用global.ORCH.RegisterResource("image")方法注册“image”资源，
 				// Use ImageStream as an indication of OpenShift
-				flavor = share.FlavorOpenShift
+				flavor = share.FlavorOpenShift //并根据注册结果设置平台类型flavor为OpenShift
 				global.ORCH.SetFlavor(flavor)
 			} else {
 				log.WithFields(log.Fields{"error": err}).Info("register image failed")
