@@ -17,29 +17,29 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const clusterCheckInterval time.Duration = time.Second * 2
+const clusterCheckInterval time.Duration = time.Second * 2  //集群检查间隔时间，默认为2秒。
 
 // const LogFile string = "/var/log/ranger/monitor.log"
-var ClusterEventChan chan *ClusterEvent = make(chan *ClusterEvent, 256)
+var ClusterEventChan chan *ClusterEvent = make(chan *ClusterEvent, 256)  //集群事件通道，用于接收和发送集群事件。该通道最多可以缓存256个事件。
 
-var selfAddr string
-var leadAddr string
-var leadGrpcPort uint16
+var selfAddr string  //代理进程的本地IP地址。
+var leadAddr string  //当前集群中的领导者节点IP地址。
+var leadGrpcPort uint16  //当前集群中的领导者节点gRPC端口号。
 
-var admitChan chan bool = make(chan bool, 1)
-var admitted bool = false
-var errNotAdmitted = errors.New("Enforcer is not able to join the cluster")
-var errCtrlNotReady = errors.New("Controller is not ready")
+var admitChan chan bool = make(chan bool, 1)  //加入集群的信道，用于阻塞等待授权。该信道最多可以缓存1个布尔类型的值。
+var admitted bool = false  //是否已经被授权加入集群。
+var errNotAdmitted = errors.New("Enforcer is not able to join the cluster")  //未被授权加入集群的错误信息。
+var errCtrlNotReady = errors.New("Controller is not ready")  //Controller未准备就绪的错误信息。
 
-type workloadInfo struct {
+type workloadInfo struct {  //代表一个工作负载的信息。其中包含一个指向CLUSTER工作负载对象的指针。
 	wl *share.CLUSWorkload
 }
 
-var wlCacheMap map[string]*workloadInfo = make(map[string]*workloadInfo)
+var wlCacheMap map[string]*workloadInfo = make(map[string]*workloadInfo)  //用于缓存不同工作负载的相关信息。
 
-func leaveCluster() {
+func leaveCluster() {  //用于代理进程从集群中离开
 	// Don't try to remove keys. Let controller do that.
-	if !agentEnv.runWithController {
+	if !agentEnv.runWithController {  //程序首先判断当前代理进程是否运行在控制器模式下，如果不是，则调用cluster.LeaveCluster(false)方法通知集群管理器自身即将离开集群。
 		cluster.LeaveCluster(false)
 	}
 }
