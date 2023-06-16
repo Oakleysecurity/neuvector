@@ -720,6 +720,8 @@ func getControllerFromCluster(ip string) *share.CLUSController {
 	return nil
 }
 
+//用于获取当前领导者节点的gRPC终端地址
+//具体来说，程序首先检查leadGrpcPort变量是否已经设置，如果没有则从集群中获取当前领导者节点对应的Controller对象，并从该对象中获取RPCServerPort属性值。
 func getLeadGRPCEndpoint() string {
 	// Assume leadGrpcPort is not changed, so we only grab it once
 	if leadGrpcPort == 0 {
@@ -733,6 +735,15 @@ func getLeadGRPCEndpoint() string {
 	return fmt.Sprintf("%s:%v", leadAddr, leadGrpcPort)
 }
 
+
+//用于实现集群事件处理的主循环
+//具体来说，程序首先删除在给定集合中不存在的容器对应的键值对。
+/*
+然后，程序启动一个goroutine，该goroutine不断从ClusterEventChan通道中读取事件，并调用clusterEventHandler()方法处理这些事件。
+接着，程序按照网络模式对现有容器进行排序，并使用ContainerTaskChan通道将每个容器添加到任务队列中。
+最后，程序启动多个Watcher对象监听集群中各种配置和状态的变化，并注册相应的回调函数以便及时响应这些变化。
+通过调用该函数，程序可以不断监听并处理集群中的事件，以维护集群数据的正确性和一致性。
+*/
 func clusterLoop(existing utils.Set) {
 	// Remove non-existing containers from cluster
 	store := share.CLUSWorkloadHostStore(Host.ID)
@@ -790,6 +801,7 @@ func clusterLoop(existing utils.Set) {
 	}()
 }
 
+//用于关闭集群。具体来说，程序首先暂停集群中所有Watcher的监视器。
 func closeCluster() {
 	cluster.PauseAllWatchers(true)
 
