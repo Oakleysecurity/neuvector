@@ -47,6 +47,42 @@ var ContainerTaskChan chan *ContainerTask
 //           If not interceptable, the container cannot be quarantined
 // hasDatapath: parent and non-platform-containers, could be host mode
 // in the case that parent's pid==0, child's hasDatapath could be true
+/*
+id: 容器的唯一标识符，通常是一个字符串。
+name: 容器的名称，通常由字母、数字和其他特殊字符组成。
+pid: 容器进程的PID号。
+info: 附加元数据，包含了容器的各种属性和状态信息。
+inline: 标记容器是否以行内形式显示。
+blocking: 标记容器是否处于阻塞状态。
+quar: 标记容器是否被隔离。
+capIntcp: 标记容器是否支持拦截功能。
+capBlock: 标记容器是否支持阻塞功能。
+hostMode: 标记容器是否在主机网络模式下运行。
+hasDatapath: 标记容器是否创建了datapath。
+nfq: 标记容器是否开启了nfqueue。
+policyMode: 标记容器的网络策略模式。
+stats: 包含了容器的统计信息，例如CPU使用率、内存使用率等等。
+intcpPairs: 包含了容器的拦截规则。
+ownListenPorts: 保存容器监听的端口。
+appMap: 保存与容器相关的应用程序信息。
+portMap: 保存容器映射的端口信息。
+parentNS: 父命名空间的路径。
+pods: 保存与容器相关的Pod信息。
+service: 标记容器所属的服务。
+domain: 标记容器所属的域名。
+role: 标记容器的角色。
+svcSubnet: 保存服务子网的CIDR地址。
+cgroupMemory: 容器所在的cgroup的内存限制。
+cgroupCPUAcct: 容器所在的cgroup的CPU使用情况。
+rootFs: 容器的根文件系统。
+upperDir: 容器的联合文件系统。
+propertyFilled: 标记容器的属性是否已被填充。
+benchReported: 标记容器是否已报告基准测试结果。
+pushPHistory: 标记容器是否允许推送历史记录。
+examIntface: 标记容器是否需要检查接口。
+scanCache: 缓存的扫描结果。
+*/
+
 type containerData struct {
 	id             string
 	name           string
@@ -86,6 +122,30 @@ type containerData struct {
 // All information inside localSystemInfo is protected by mutex,
 // and is only modified by docker task thread. Sending info to DP
 // needs to grab dpMsg lock, so be careful to avoid lock embedding
+//表示本地系统相关的数据。
+/*
+mutex: 用于保护结构体的读写操作的互斥锁。
+hostScanCache: 主机扫描结果的缓存。
+activeContainers: 当前正在运行的容器对象。
+neuContainers: 专门保存神经元（Neuron）类型的容器对象。
+activePid2ID: 当前正在运行的容器PID和ID之间的映射关系。
+allContainers: 所有的容器对象的集合。
+macContainerMap: MAC地址与容器ID之间的映射关系。
+macPortPairMap: MAC地址与拦截规则之间的映射关系。
+networks: 从docker daemon中读取到的网络信息。
+networkLBs: 从docker daemon中读取到的负载均衡信息。
+localSubnetMap: 本地容器连接的所有子网的CIDR地址集合，包括overlay和本地桥接子网。
+internalSubnets: 所有容器连接的子网的CIDR地址集合，包括本地子网和从Controller中获取的子网。
+containerConfig: 容器配置信息。
+policyMode: 本地系统的网络策略模式。
+agentConfig: 代理配置信息。
+agentStats: 代理统计信息。
+hostIPs: 本地主机的IP地址集合。
+tapProxymesh: 是否启用了tap代理转发网格。
+jumboFrameMTU: 是否启用了jumbo帧MTU。
+xffEnabled: 是否启用了X-Forwarded-For（XFF）头部。
+ciliumCNI: 是否启用了Cilium CNI插件。
+*/
 type localSystemInfo struct {
 	mutex            sync.RWMutex
 	hostScanCache    []byte
@@ -123,6 +183,26 @@ var defaultXffEnabled bool = false
 var specialSubnets map[string]share.CLUSSpecSubnet = make(map[string]share.CLUSSpecSubnet)
 var rtStorageDriver string
 
+/*
+networks: 从docker daemon中读取到的网络信息的集合，通过make函数进行初始化。
+networkLBs: 从docker daemon中读取到的负载均衡信息的集合，通过make函数进行初始化。
+activeContainers: 当前正在运行的容器对象的集合，通过make函数进行初始化。
+neuContainers: 专门保存神经元（Neuron）类型的容器对象的集合，通过make函数进行初始化。
+activePid2ID: 当前正在运行的容器PID和ID之间的映射关系的集合，通过make函数进行初始化。
+allContainers: 所有的容器对象的集合，通过utils.NewSet()进行初始化。
+macContainerMap: MAC地址与容器ID之间的映射关系的集合，通过make函数进行初始化。
+macPortPairMap: MAC地址与拦截规则之间的映射关系的集合，通过make函数进行初始化。
+localSubnetMap: 本地容器连接的所有子网的CIDR地址集合，包括overlay和本地桥接子网，通过make函数进行初始化。
+internalSubnets: 所有容器连接的子网的CIDR地址集合，包括本地子网和从Controller中获取的子网，通过make函数进行初始化。
+containerConfig: 容器配置信息的集合，通过make函数进行初始化。
+policyMode: 本地系统的网络策略模式，默认值为defaultPolicyMode。
+agentConfig: 代理配置信息，默认值为一个空的CLUSAgentConfig结构体。
+hostIPs: 本地主机的IP地址集合，通过utils.NewSet()进行初始化。
+tapProxymesh: 是否启用了tap代理转发网格，默认值为defaultTapProxymesh。
+jumboFrameMTU: 是否启用了jumbo帧MTU，默认值为false。
+xffEnabled: 是否启用了X-Forwarded-For（XFF）头部，默认值为defaultXffEnabled。
+ciliumCNI: 是否启用了Cilium CNI插件，默认值为false。
+*/
 var gInfo localSystemInfo = localSystemInfo{
 	networks:         make(map[string]*container.Network),
 	networkLBs:       make(map[string]*container.NetworkEndpoint),
@@ -144,26 +224,31 @@ var gInfo localSystemInfo = localSystemInfo{
 	ciliumCNI:        false,
 }
 
+//用于获取gInfo结构体的写锁
 func gInfoLock() {
 	//log.WithFields(log.Fields{"goroutine": utils.GetGID()}).Debug("PROC: ")
 	gInfo.mutex.Lock()
 }
 
+//用于释放gInfo结构体的写锁
 func gInfoUnlock() {
 	//log.WithFields(log.Fields{"goroutine": utils.GetGID()}).Debug("PROC: ")
 	gInfo.mutex.Unlock()
 }
 
+//用于获取gInfo结构体的读锁
 func gInfoRLock() {
 	//log.WithFields(log.Fields{"goroutine": utils.GetGID()}).Debug("PROC: ")
 	gInfo.mutex.RLock()
 }
 
+//用于释放gInfo结构体的读锁
 func gInfoRUnlock() {
 	//log.WithFields(log.Fields{"goroutine": utils.GetGID()}).Debug("PROC: ")
 	gInfo.mutex.RUnlock()
 }
 
+//用于通过MAC地址查找容器对象
 func getContainerByMAC(mac net.HardwareAddr) *containerData {
 	gInfoRLock()
 	defer gInfoRUnlock()
