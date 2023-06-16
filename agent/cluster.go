@@ -701,6 +701,8 @@ func leadChangeHandler(newLead, oldLead string) {
 	}
 }
 
+//用于从集群中获取指定IP地址对应的控制器（Controller）对象
+//具体来说，程序接收一个IP地址作为输入参数，并遍历集群中所有存储在CLUSControllerStore中的键值对。
 func getControllerFromCluster(ip string) *share.CLUSController {
 	store := share.CLUSControllerStore
 	keys, _ := cluster.GetStoreKeys(store)
